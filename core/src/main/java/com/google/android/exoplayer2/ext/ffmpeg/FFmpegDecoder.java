@@ -28,21 +28,21 @@ import java.nio.ByteBuffer;
 /* package */ final class FFmpegDecoder extends
     SimpleDecoder<FFmpegPacketBuffer, FFmpegFrameBuffer, FFmpegDecoderException> {
 
-  public static final int OUTPUT_MODE_NONE = -1;
-  public static final int OUTPUT_MODE_YUV = 0;
-  public static final int OUTPUT_MODE_RGB = 1;
+  static final int OUTPUT_MODE_NONE = -1;
+  static final int OUTPUT_MODE_YUV = 0;
+  static final int OUTPUT_MODE_RGB = 1;
 
   private static final int NO_ERROR = 0;
   private static final int DECODE_ERROR = 1;
   private static final int DRM_ERROR = 2;
 
   private final ExoMediaCrypto exoMediaCrypto;
-  private final long vpxDecContext;
+  private final long ffmpegDecContext;
 
   private volatile int outputMode;
 
   /**
-   * Creates a VP9 decoder.
+   * Creates a ffmpeg decoder.
    *
    * @param numInputBuffers The number of input buffers.
    * @param numOutputBuffers The number of output buffers.
@@ -58,11 +58,11 @@ import java.nio.ByteBuffer;
       throw new FFmpegDecoderException("Failed to load decoder native libraries.");
     }
     this.exoMediaCrypto = exoMediaCrypto;
-    if (exoMediaCrypto != null && !FFmpegLibrary.vpxIsSecureDecodeSupported()) {
-      throw new FFmpegDecoderException("Vpx decoder does not support secure decode.");
+    if (exoMediaCrypto != null && !FFmpegLibrary.ffmpegIsSecureDecodeSupported()) {
+      throw new FFmpegDecoderException("FFmpeg decoder does not support secure decode.");
     }
-    vpxDecContext = vpxInit();
-    if (vpxDecContext == 0) {
+    ffmpegDecContext = ffmpegInit();
+    if (ffmpegDecContext == 0) {
       throw new FFmpegDecoderException("Failed to initialize decoder");
     }
     setInitialInputBufferSize(initialInputBufferSize);
@@ -70,7 +70,7 @@ import java.nio.ByteBuffer;
 
   @Override
   public String getName() {
-    return "libvpx" + FFmpegLibrary.getVersion();
+    return "libffmpeg" + FFmpegLibrary.getVersion();
   }
 
   /**
@@ -105,24 +105,24 @@ import java.nio.ByteBuffer;
     int inputSize = inputData.limit();
     CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
     final long result = inputBuffer.isEncrypted()
-        ? vpxSecureDecode(vpxDecContext, inputData, inputSize, exoMediaCrypto,
+        ? ffmpegSecureDecode(ffmpegDecContext, inputData, inputSize, exoMediaCrypto,
         cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
         cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
-        : vpxDecode(vpxDecContext, inputData, inputSize);
+        : ffmpegDecode(ffmpegDecContext, inputData, inputSize);
     if (result != NO_ERROR) {
       if (result == DRM_ERROR) {
-        String message = "Drm error: " + vpxGetErrorMessage(vpxDecContext);
+        String message = "Drm error: " + ffmpegGetErrorMessage(ffmpegDecContext);
         DecryptionException cause = new DecryptionException(
-            vpxGetErrorCode(vpxDecContext), message);
+            ffmpegGetErrorCode(ffmpegDecContext), message);
         return new FFmpegDecoderException(message, cause);
       } else {
-        return new FFmpegDecoderException("Decode error: " + vpxGetErrorMessage(vpxDecContext));
+        return new FFmpegDecoderException("Decode error: " + ffmpegGetErrorMessage(ffmpegDecContext));
       }
     }
 
     if (!inputBuffer.isDecodeOnly()) {
       outputBuffer.init(inputBuffer.timeUs, outputMode);
-      int getFrameResult = vpxGetFrame(vpxDecContext, outputBuffer);
+      int getFrameResult = ffmpegGetFrame(ffmpegDecContext, outputBuffer);
       if (getFrameResult == 1) {
         outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
       } else if (getFrameResult == -1) {
@@ -136,17 +136,17 @@ import java.nio.ByteBuffer;
   @Override
   public void release() {
     super.release();
-    vpxClose(vpxDecContext);
+    ffmpegClose(ffmpegDecContext);
   }
 
-  private native long vpxInit();
-  private native long vpxClose(long context);
-  private native long vpxDecode(long context, ByteBuffer encoded, int length);
-  private native long vpxSecureDecode(long context, ByteBuffer encoded, int length,
+  private native long ffmpegInit();
+  private native long ffmpegClose(long context);
+  private native long ffmpegDecode(long context, ByteBuffer encoded, int length);
+  private native long ffmpegSecureDecode(long context, ByteBuffer encoded, int length,
       ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
       int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);
-  private native int vpxGetFrame(long context, FFmpegFrameBuffer outputBuffer);
-  private native int vpxGetErrorCode(long context);
-  private native String vpxGetErrorMessage(long context);
+  private native int ffmpegGetFrame(long context, FFmpegFrameBuffer outputBuffer);
+  private native int ffmpegGetErrorCode(long context);
+  private native String ffmpegGetErrorMessage(long context);
 
 }

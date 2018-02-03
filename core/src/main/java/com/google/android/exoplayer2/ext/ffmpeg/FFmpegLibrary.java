@@ -24,19 +24,19 @@ import com.google.android.exoplayer2.util.LibraryLoader;
 public final class FFmpegLibrary {
 
   static {
-    ExoPlayerLibraryInfo.registerModule("goog.exo.vpx");
+    ExoPlayerLibraryInfo.registerModule("goog.exo.ffmpeg");
   }
 
-  private static final LibraryLoader LOADER = new LibraryLoader("vpx", "vpxJNI");
+  private static final LibraryLoader LOADER = new LibraryLoader("ffmpeg", "ffmpegJNI");
 
   private FFmpegLibrary() {}
 
   /**
-   * Override the names of the Vpx native libraries. If an application wishes to call this method,
+   * Override the names of the FFmpeg native libraries. If an application wishes to call this method,
    * it must do so before calling any other method defined by this class, and before instantiating a
    * {@link FFmpegVideoRenderer} instance.
    *
-   * @param libraries The names of the Vpx native libraries.
+   * @param libraries The names of the FFmpeg native libraries.
    */
   public static void setLibraries(String... libraries) {
     LOADER.setLibraries(libraries);
@@ -53,7 +53,7 @@ public final class FFmpegLibrary {
    * Returns the version of the underlying library if available, or null otherwise.
    */
   public static String getVersion() {
-    return isAvailable() ? vpxGetVersion() : null;
+    return isAvailable() ? ffmpegGetVersion() : null;
   }
 
   /**
@@ -61,11 +61,11 @@ public final class FFmpegLibrary {
    * null otherwise.
    */
   public static String getBuildConfig() {
-    return isAvailable() ? vpxGetBuildConfig() : null;
+    return isAvailable() ? ffmpegGetBuildConfig() : null;
   }
 
   /**
-   * Returns true if the underlying libvpx library supports high bit depth.
+   * Returns true if the underlying libffmpeg library supports high bit depth.
    */
   public static boolean isHighBitDepthSupported() {
     String config = getBuildConfig();
@@ -74,8 +74,8 @@ public final class FFmpegLibrary {
     return indexHbd >= 0;
   }
 
-  private static native String vpxGetVersion();
-  private static native String vpxGetBuildConfig();
-  public static native boolean vpxIsSecureDecodeSupported();
+  private static native String ffmpegGetVersion();
+  private static native String ffmpegGetBuildConfig();
+  public static native boolean ffmpegIsSecureDecodeSupported();
 
 }

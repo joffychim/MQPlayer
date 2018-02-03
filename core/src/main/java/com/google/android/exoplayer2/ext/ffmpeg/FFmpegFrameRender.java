@@ -25,7 +25,7 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
- * GLSurfaceView.Renderer implementation that can render YUV Frames returned by libvpx after
+ * GLSurfaceView.Renderer implementation that can render YUV Frames returned by libffmpeg after
  * decoding. It does the YUV to RGB color conversion in the Fragment Shader.
  */
 /* package */ class FFmpegFrameRender implements GLSurfaceView.Renderer {
@@ -100,7 +100,7 @@ import javax.microedition.khronos.opengles.GL10;
 
   /**
    * Set a frame to be rendered. This should be followed by a call to
-   * VpxVideoSurfaceView.requestRender() to actually render the frame.
+   * FFmpegVideoSurfaceView.requestRender() to actually render the frame.
    *
    * @param outputBuffer OutputBuffer containing the YUV Frame to be rendered
    */

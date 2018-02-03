@@ -89,7 +89,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
    * The initial input buffer size. Input buffers are reallocated dynamically if this value is
    * insufficient.
    */
-  private static final int INITIAL_INPUT_BUFFER_SIZE = 768 * 1024; // Value based on cs/SoftVpx.cpp.
+  private static final int INITIAL_INPUT_BUFFER_SIZE = 768 * 1024; // Value based on cs/SoftFFmpeg.cpp.
 
   private final boolean scaleToFit;
   private final long allowedJoiningTimeMs;
@@ -623,7 +623,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
 
     try {
       long codecInitializingTimestamp = SystemClock.elapsedRealtime();
-      TraceUtil.beginSection("createVpxDecoder");
+      TraceUtil.beginSection("createFFmpegDecoder");
       decoder = new FFmpegDecoder(NUM_INPUT_BUFFERS, NUM_OUTPUT_BUFFERS, INITIAL_INPUT_BUFFER_SIZE,
           mediaCrypto);
       decoder.setOutputMode(outputMode);
