@@ -1,6 +1,6 @@
 apply plugin: 'com.android.library'
 
-def ffmpeg_lib_include_path = project.projectDir.absolutePath + "/src/main/libs/include"
+def ffmpeg_lib_include_path = project.projectDir.absolutePath + "/libs/ffmpeg/include"
 
 android {
     compileSdkVersion 26
@@ -33,7 +33,7 @@ android {
 
     sourceSets {
         main {
-            jniLibs.srcDirs = ['libs']
+            jniLibs.srcDirs = ['libs', 'libs/ffmpeg']
         }
     }
 }

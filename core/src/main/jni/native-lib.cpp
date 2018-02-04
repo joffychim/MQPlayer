@@ -1,8 +1,6 @@
 #include <jni.h>
 #include <string>
 
-#include "config.h"
-
 extern "C"
 JNIEXPORT jstring
 
