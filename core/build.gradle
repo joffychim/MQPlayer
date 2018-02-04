@@ -1,5 +1,7 @@
 apply plugin: 'com.android.library'
 
+def ffmpeg_lib_include_path = project.projectDir.absolutePath + "/src/main/libs/include"
+
 android {
     compileSdkVersion 26
 
@@ -11,7 +13,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags ""
+                cppFlags.add("-I${file(ffmpeg_lib_include_path)}")
             }
         }
     }
@@ -26,6 +28,12 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/jni/CMakeLists.txt"
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['libs']
         }
     }
 }
