@@ -1,0 +1,12 @@
+[
+  {
+    "name": "MQPlayer",
+    "samples": [
+      {
+        "name": "Faceu",
+        "uri": "http://snsstatic.faceu.mobi/sns/video/feed-usr/20180127/160958979/1840/145485757950197760_1.mp4",
+        "extension": "mp4"
+      }
+    ]
+  }
+]
