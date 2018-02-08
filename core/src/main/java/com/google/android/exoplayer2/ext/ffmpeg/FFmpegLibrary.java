@@ -24,10 +24,10 @@ import com.google.android.exoplayer2.util.LibraryLoader;
 public final class FFmpegLibrary {
 
   static {
-    ExoPlayerLibraryInfo.registerModule("goog.exo.ffmpeg");
+    ExoPlayerLibraryInfo.registerModule("moqan.exo.ffmpeg");
   }
 
-  private static final LibraryLoader LOADER = new LibraryLoader("ffmpeg", "ffmpegJNI");
+  private static final LibraryLoader LOADER = new LibraryLoader("ffmpeg", "mqplayer");
 
   private FFmpegLibrary() {}
 
