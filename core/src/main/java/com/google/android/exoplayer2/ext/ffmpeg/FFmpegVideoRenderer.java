@@ -34,6 +34,7 @@ import com.google.android.exoplayer2.drm.DrmSession;
 import com.google.android.exoplayer2.drm.DrmSession.DrmSessionException;
 import com.google.android.exoplayer2.drm.DrmSessionManager;
 import com.google.android.exoplayer2.drm.ExoMediaCrypto;
+import com.google.android.exoplayer2.drm.FrameworkMediaCrypto;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.TraceUtil;
@@ -98,7 +99,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private final EventDispatcher eventDispatcher;
   private final FormatHolder formatHolder;
   private final DecoderInputBuffer flagsOnlyBuffer;
-  private final DrmSessionManager<ExoMediaCrypto> drmSessionManager;
+  private final DrmSessionManager<FrameworkMediaCrypto> drmSessionManager;
 
   private DecoderCounters decoderCounters;
   private Format format;
@@ -106,8 +107,8 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private FFmpegPacketBuffer inputBuffer;
   private FFmpegFrameBuffer outputBuffer;
   private FFmpegFrameBuffer nextOutputBuffer;
-  private DrmSession<ExoMediaCrypto> drmSession;
-  private DrmSession<ExoMediaCrypto> pendingDrmSession;
+  private DrmSession<FrameworkMediaCrypto> drmSession;
+  private DrmSession<FrameworkMediaCrypto> pendingDrmSession;
 
   private @ReinitializationState int decoderReinitializationState;
   private boolean decoderReceivedBuffers;
@@ -176,7 +177,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
    */
   public FFmpegVideoRenderer(boolean scaleToFit, long allowedJoiningTimeMs,
                              Handler eventHandler, VideoRendererEventListener eventListener,
-                             int maxDroppedFramesToNotify, DrmSessionManager<ExoMediaCrypto> drmSessionManager,
+                             int maxDroppedFramesToNotify, DrmSessionManager<FrameworkMediaCrypto> drmSessionManager,
                              boolean playClearSamplesWithoutKeys) {
     super(C.TRACK_TYPE_VIDEO);
     this.scaleToFit = scaleToFit;
@@ -195,7 +196,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
 
   @Override
   public int supportsFormat(Format format) {
-    if (!FFmpegLibrary.isAvailable() || !MimeTypes.VIDEO_VP9.equalsIgnoreCase(format.sampleMimeType)) {
+    if (!FFmpegLibrary.isAvailable() || !MimeTypes.VIDEO_MP4.equalsIgnoreCase(format.sampleMimeType)) {
       return FORMAT_UNSUPPORTED_TYPE;
     } else if (!supportsFormatDrm(drmSessionManager, format.drmInitData)) {
       return FORMAT_UNSUPPORTED_DRM;
