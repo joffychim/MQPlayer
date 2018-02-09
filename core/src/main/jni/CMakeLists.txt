@@ -1,49 +1,19 @@
-# For more information about using CMake with Android Studio, read the
-# documentation: https://d.android.com/studio/projects/add-native-code.html
-
-# Sets the minimum version of CMake required to build the native library.
-
 cmake_minimum_required(VERSION 3.4.1)
 
 # 指定include文件
-include_directories(${PROJECT_SOURCE_DIR}/../../.../libs/ffmpeg/include)
+include_directories(BEFORE ${PROJECT_SOURCE_DIR}/../../../libs/ffmpeg/include)
 
 # 找ffmpeg
 add_library(ffmpeg SHARED IMPORTED)
-set(ffmpegLibPath
-${PROJECT_SOURCE_DIR}/../../../libs/ffmpeg/armeabi-v7a/libffmpeg.so)
+set(ffmpegLibPath ${PROJECT_SOURCE_DIR}/../../../libs/ffmpeg/armeabi-v7a/libffmpeg.so)
 set_target_properties(ffmpeg PROPERTIES IMPORTED_LOCATION ${ffmpegLibPath})
 
-# Creates and names a library, sets it as either STATIC
-# or SHARED, and provides the relative paths to its source code.
-# You can define multiple libraries, and CMake builds them for you.
-# Gradle automatically packages shared libraries with your APK.
+add_library(mqplayer
+            SHARED
+            ffmpeg_library.cpp)
 
-add_library( # Sets the name of the library.
-             mqplayer
-
-             # Sets the library as a shared library.
-             SHARED
-
-             # Provides a relative path to your source file(s).
-             ffmpeg_library.cpp)
-
-# Searches for a specified prebuilt library and stores the path as a
-# variable. Because CMake includes system libraries in the search path by
-# default, you only need to specify the name of the public NDK library
-# you want to add. CMake verifies that the library exists before
-# completing its build.
-
-find_library( # Sets the name of the path variable.
-              log-lib
-
-              # Specifies the name of the NDK library that
-              # you want CMake to locate.
-              log )
-
-# Specifies libraries CMake should link to your target library. You
-# can link multiple libraries, such as libraries you define in this
-# build script, prebuilt third-party libraries, or system libraries.
+find_library(log-lib
+              log)
 
 target_link_libraries(mqplayer
                        ${log-lib}
