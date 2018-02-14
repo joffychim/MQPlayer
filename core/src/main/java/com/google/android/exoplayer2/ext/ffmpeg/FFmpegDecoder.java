@@ -16,11 +16,15 @@
 package com.google.android.exoplayer2.ext.ffmpeg;
 
 import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
 import com.google.android.exoplayer2.decoder.SimpleDecoder;
 import com.google.android.exoplayer2.drm.DecryptionException;
 import com.google.android.exoplayer2.drm.ExoMediaCrypto;
+import com.google.android.exoplayer2.util.MimeTypes;
+
 import java.nio.ByteBuffer;
+import java.util.List;
 
 /**
  * ffmpeg decoder.
@@ -35,6 +39,8 @@ import java.nio.ByteBuffer;
   private static final int NO_ERROR = 0;
   private static final int DECODE_ERROR = 1;
   private static final int DRM_ERROR = 2;
+  private static final int DECODE_AGAIN = 3;
+
 
   private final ExoMediaCrypto exoMediaCrypto;
   private final long ffmpegDecContext;
@@ -51,7 +57,7 @@ import java.nio.ByteBuffer;
    *     content. Maybe null and can be ignored if decoder does not handle encrypted content.
    * @throws FFmpegDecoderException Thrown if an exception occurs when initializing the decoder.
    */
-  public FFmpegDecoder(int numInputBuffers, int numOutputBuffers, int initialInputBufferSize,
+  public FFmpegDecoder(Format format, int numInputBuffers, int numOutputBuffers, int initialInputBufferSize,
                        ExoMediaCrypto exoMediaCrypto) throws FFmpegDecoderException {
     super(new FFmpegPacketBuffer[numInputBuffers], new FFmpegFrameBuffer[numOutputBuffers]);
     if (!FFmpegLibrary.isAvailable()) {
@@ -61,7 +67,8 @@ import java.nio.ByteBuffer;
     if (exoMediaCrypto != null && !FFmpegLibrary.ffmpegIsSecureDecodeSupported()) {
       throw new FFmpegDecoderException("FFmpeg decoder does not support secure decode.");
     }
-    ffmpegDecContext = ffmpegInit();
+    String mimeType = format.sampleMimeType;
+    ffmpegDecContext = ffmpegInit("h264", getExtraData(mimeType, format.initializationData));
     if (ffmpegDecContext == 0) {
       throw new FFmpegDecoderException("Failed to initialize decoder");
     }
@@ -115,6 +122,8 @@ import java.nio.ByteBuffer;
         DecryptionException cause = new DecryptionException(
             ffmpegGetErrorCode(ffmpegDecContext), message);
         return new FFmpegDecoderException(message, cause);
+      } else if (result == DECODE_AGAIN) {
+        outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
       } else {
         return new FFmpegDecoderException("Decode error: " + ffmpegGetErrorMessage(ffmpegDecContext));
       }
@@ -128,7 +137,7 @@ import java.nio.ByteBuffer;
       } else if (getFrameResult == -1) {
         return new FFmpegDecoderException("Buffer initialization failed.");
       }
-      outputBuffer.colorInfo = inputBuffer.colorInfo;
+      // outputBuffer.colorInfo = inputBuffer.colorInfo;
     }
     return null;
   }
@@ -139,7 +148,29 @@ import java.nio.ByteBuffer;
     ffmpegClose(ffmpegDecContext);
   }
 
-  private native long ffmpegInit();
+  private static byte[] getExtraData(String mimeType, List<byte[]> initializationData) {
+    switch (mimeType) {
+      case MimeTypes.VIDEO_MP4:
+      case MimeTypes.VIDEO_H264:
+        byte[] header0 = initializationData.get(0);
+        byte[] header1 = initializationData.get(1);
+        byte[] extraData = new byte[header0.length + header1.length + 6];
+        extraData[0] = (byte) (header0.length >> 8);
+        extraData[1] = (byte) (header0.length & 0xFF);
+        System.arraycopy(header0, 0, extraData, 2, header0.length);
+        extraData[header0.length + 2] = 0;
+        extraData[header0.length + 3] = 0;
+        extraData[header0.length + 4] =  (byte) (header1.length >> 8);
+        extraData[header0.length + 5] = (byte) (header1.length & 0xFF);
+        System.arraycopy(header1, 0, extraData, header0.length + 6, header1.length);
+        return extraData;
+      default:
+        // Other codecs do not require extra data.
+        return null;
+    }
+  }
+
+  private native long ffmpegInit(String codecName, byte[] extraData);
   private native long ffmpegClose(long context);
   private native long ffmpegDecode(long context, ByteBuffer encoded, int length);
   private native long ffmpegSecureDecode(long context, ByteBuffer encoded, int length,

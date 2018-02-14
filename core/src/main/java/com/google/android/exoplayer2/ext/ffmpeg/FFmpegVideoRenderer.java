@@ -22,6 +22,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.support.annotation.IntDef;
 import android.view.Surface;
+
 import com.google.android.exoplayer2.BaseRenderer;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
@@ -41,6 +42,7 @@ import com.google.android.exoplayer2.util.TraceUtil;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.video.VideoRendererEventListener;
 import com.google.android.exoplayer2.video.VideoRendererEventListener.EventDispatcher;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
@@ -196,7 +198,12 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
 
   @Override
   public int supportsFormat(Format format) {
-    if (!FFmpegLibrary.isAvailable() || !MimeTypes.VIDEO_MP4.equalsIgnoreCase(format.sampleMimeType)) {
+    if (!FFmpegLibrary.isAvailable() ||
+            !(MimeTypes.VIDEO_MP4.equalsIgnoreCase(format.sampleMimeType)
+            || MimeTypes.VIDEO_H264.equalsIgnoreCase(format.sampleMimeType)
+            || MimeTypes.VIDEO_MPEG.equalsIgnoreCase(format.sampleMimeType)
+            || MimeTypes.VIDEO_MPEG2.equalsIgnoreCase(format.sampleMimeType))
+            ) {
       return FORMAT_UNSUPPORTED_TYPE;
     } else if (!supportsFormatDrm(drmSessionManager, format.drmInitData)) {
       return FORMAT_UNSUPPORTED_DRM;
@@ -410,7 +417,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private void renderRgbFrame(FFmpegFrameBuffer outputBuffer, boolean scale) {
     if (bitmap == null || bitmap.getWidth() != outputBuffer.width
         || bitmap.getHeight() != outputBuffer.height) {
-      bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
+      bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.ARGB_8888);
     }
     bitmap.copyPixelsFromBuffer(outputBuffer.data);
     Canvas canvas = surface.lockCanvas(null);
@@ -625,7 +632,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     try {
       long codecInitializingTimestamp = SystemClock.elapsedRealtime();
       TraceUtil.beginSection("createFFmpegDecoder");
-      decoder = new FFmpegDecoder(NUM_INPUT_BUFFERS, NUM_OUTPUT_BUFFERS, INITIAL_INPUT_BUFFER_SIZE,
+      decoder = new FFmpegDecoder(format, NUM_INPUT_BUFFERS, NUM_OUTPUT_BUFFERS, INITIAL_INPUT_BUFFER_SIZE,
           mediaCrypto);
       decoder.setOutputMode(outputMode);
       TraceUtil.endSection();
