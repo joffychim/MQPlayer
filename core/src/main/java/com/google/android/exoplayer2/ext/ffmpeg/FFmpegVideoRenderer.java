@@ -417,7 +417,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private void renderRgbFrame(FFmpegFrameBuffer outputBuffer, boolean scale) {
     if (bitmap == null || bitmap.getWidth() != outputBuffer.width
         || bitmap.getHeight() != outputBuffer.height) {
-      bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.ARGB_8888);
+      bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
     }
     bitmap.copyPixelsFromBuffer(outputBuffer.data);
     Canvas canvas = surface.lockCanvas(null);

@@ -112,13 +112,13 @@ int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
     int width = frame->width;
     int height = frame->height;
 
-    libyuv::I420ToARGB((const uint8 *) frame->data[0],
+    libyuv::I420ToRGB565((const uint8 *) frame->data[0],
                        frame->linesize[0],
                        (const uint8 *) frame->data[1],
                        frame->linesize[1],
                        (const uint8 *) frame->data[2],
                        frame->linesize[2],
-                       (uint8 *) data, 4 * width, width, height);
+                       (uint8 *) data, 2 * width, width, height);
     return 0;
 }
 

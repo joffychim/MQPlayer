@@ -79,7 +79,7 @@ import java.nio.ByteBuffer;
     if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, 2)) {
       return false;
     }
-    int minimumRgbSize = width * height * 4;
+    int minimumRgbSize = width * height * 2;
     initData(minimumRgbSize);
     return true;
   }
