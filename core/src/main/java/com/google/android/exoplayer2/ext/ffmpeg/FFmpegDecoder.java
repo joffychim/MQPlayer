@@ -69,7 +69,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
             throw new FFmpegDecoderException("FFmpeg decoder does not support secure decode.");
         }
         String mimeType = format.sampleMimeType;
-        ffmpegDecContext = ffmpegInit("h264", getExtraData(mimeType, format.initializationData));
+        ffmpegDecContext = ffmpegInit("h264", getExtraData(mimeType, format.initializationData), Util.getCpuNumCores() + 1);
         if (ffmpegDecContext == 0) {
             throw new FFmpegDecoderException("Failed to initialize decoder");
         }
@@ -168,7 +168,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
         }
     }
 
-    private native long ffmpegInit(String codecName, byte[] extraData);
+    private native long ffmpegInit(String codecName, byte[] extraData, int threadCount);
 
     private native long ffmpegClose(long context);
 

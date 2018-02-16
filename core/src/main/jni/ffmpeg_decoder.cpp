@@ -40,7 +40,7 @@ AVCodec *getCodecByName(JNIEnv* env, jstring codecName) {
 }
 
 AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
-                              jbyteArray extraData) {
+                              jbyteArray extraData, jint threadCount) {
     AVCodecContext *context = avcodec_alloc_context3(codec);
     if (!context) {
         LOGE("Failed to allocate avcodec context.");
@@ -58,7 +58,11 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
         }
         env->GetByteArrayRegion(extraData, 0, size, (jbyte *) context->extradata);
     }
-    int result = avcodec_open2(context, codec, NULL);
+    AVDictionary *opts = NULL;
+    av_dict_set_int(&opts, "threads", threadCount, 0);
+    av_dict_set_int(&opts, "lowres", true, 0);
+
+    int result = avcodec_open2(context, codec, &opts);
     if (result < 0) {
         logError("avcodec_open2", result);
         releaseContext(context);
@@ -128,7 +132,7 @@ int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
     return 0;
 }
 
-DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData) {
+DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData, jint threadCount) {
     avcodec_register_all();
     AVCodec *codec = getCodecByName(env, codecName);
     if (!codec) {
@@ -137,7 +141,7 @@ DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData) {
     }
 
     initJavaRef(env);
-    return (jlong) createContext(env, codec, extraData);
+    return (jlong) createContext(env, codec, extraData, threadCount);
 }
 
 DECODER_FUNC(jlong , ffmpegClose, jlong jContext) {
