@@ -59,12 +59,10 @@ import java.nio.ByteBuffer;
   /**
    * Initializes the buffer.
    *
-   * @param timeUs The presentation timestamp for the buffer, in microseconds.
    * @param mode The output mode. One of {@link FFmpegDecoder#OUTPUT_MODE_NONE},
    *     {@link FFmpegDecoder#OUTPUT_MODE_RGB} and {@link FFmpegDecoder#OUTPUT_MODE_YUV}.
    */
-  public void init(long timeUs, int mode) {
-    this.timeUs = timeUs;
+  public void init(int mode) {
     this.mode = mode;
   }
 

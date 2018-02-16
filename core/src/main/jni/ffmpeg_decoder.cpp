@@ -15,6 +15,7 @@ static jmethodID initForRgbFrame;
 static jmethodID initForYuvFrame;
 static jfieldID dataField;
 static jfieldID outputModeField;
+static jfieldID timeFrameUsField;
 
 void releaseContext(AVCodecContext *context);
 int decodePacket(AVCodecContext *context, AVPacket *packet,
@@ -77,6 +78,8 @@ void initJavaRef(JNIEnv *env) {
     dataField = env->GetFieldID(outputBufferClass, "data",
                                 "Ljava/nio/ByteBuffer;");
     outputModeField = env->GetFieldID(outputBufferClass, "mode", "I");
+
+    timeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
 }
 
 void releaseContext(AVCodecContext *context) {
@@ -90,9 +93,10 @@ int decodePacket(AVCodecContext *context, AVPacket *packet) {
     int result = 0;
     // Queue input data.
     result = avcodec_send_packet(context, packet);
-    if (result != 0) {
-        logError("avcodec_send_packet", result);
-        return result;
+    if (result == AVERROR(EAGAIN)) {
+        return 3;
+    } else if (result != 0) {
+        return -1;
     }
     return 0;
 }
@@ -111,6 +115,8 @@ int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
 
     int width = frame->width;
     int height = frame->height;
+
+    env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
 
     libyuv::I420ToRGB565((const uint8 *) frame->data[0],
                        frame->linesize[0],
@@ -139,7 +145,12 @@ DECODER_FUNC(jlong , ffmpegClose, jlong jContext) {
     return 0;
 }
 
-DECODER_FUNC(jlong, ffmpegDecode, jlong jContext, jobject encoded, jint len) {
+DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
+    AVCodecContext* context = (AVCodecContext*)jContext;
+    avcodec_flush_buffers(context);
+}
+
+DECODER_FUNC(jlong, ffmpegDecode, jlong jContext, jobject encoded, jint len, jlong timeUs) {
     AVCodecContext* context = (AVCodecContext*)jContext;
     uint8_t *packetBuffer = (uint8_t *) env->GetDirectBufferAddress(encoded);
 
@@ -148,6 +159,8 @@ DECODER_FUNC(jlong, ffmpegDecode, jlong jContext, jobject encoded, jint len) {
     av_init_packet(&packet);
     packet.data = packetBuffer;
     packet.size = len;
+
+    packet.pts = timeUs;
 
     return decodePacket(context, &packet);
 }
