@@ -37,11 +37,11 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
     static final int OUTPUT_MODE_RGB = 1;
 
     private static final int NO_ERROR = 0;
-    private static final int OUTPUT_BUFFER_ALLOCATE_FAILED = -1;
     private static final int DECODE_ERROR = 1;
     private static final int DRM_ERROR = 2;
     private static final int DECODE_AGAIN = 3;
-
+    private static final int DECODE_EOF = 4;
+    private static final int OUTPUT_BUFFER_ALLOCATE_FAILED = 5;
 
     private final ExoMediaCrypto exoMediaCrypto;
     private final long ffmpegDecContext;
@@ -155,7 +155,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
             outputBuffer.timeUs = -1L;
         } else if (getFrameResult == OUTPUT_BUFFER_ALLOCATE_FAILED) {
             return new FFmpegDecoderException("Buffer initialization failed.");
-        } else if (getFrameResult != NO_ERROR) {
+        } else if (getFrameResult != NO_ERROR && getFrameResult != DECODE_EOF) {
             return new FFmpegDecoderException("GetFrame error: " + ffmpegGetErrorMessage(ffmpegDecContext));
         }
         return null;
@@ -196,18 +196,18 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
 
     private native long ffmpegInit(String codecName, byte[] extraData, int threadCount);
 
-    private native long ffmpegClose(long context);
+    private native int ffmpegClose(long context);
 
     private native void ffmpegFlushBuffers(long context);
 
-    private native long ffmpegDecode(long context,
+    private native int ffmpegDecode(long context,
                                      ByteBuffer encoded,
                                      int length,
                                      long timeUs,
                                      boolean isDecodeOnly,
                                      boolean isEndOfStream);
 
-    private native long ffmpegSecureDecode(long context,
+    private native int ffmpegSecureDecode(long context,
                                            ByteBuffer encoded,
                                            int length,
                                            ExoMediaCrypto mediaCrypto,

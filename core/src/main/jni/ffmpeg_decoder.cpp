@@ -9,6 +9,14 @@ extern "C" {
     #include <libavcodec/avcodec.h>
 }
 
+#define UNSUPPORTED_ERROR -2
+#define OTHER_ERROR -1
+#define NO_ERROR 0
+#define DECODE_ERROR 1
+#define DRM_ERROR 2
+#define DECODE_AGAIN 3
+#define DECODE_EOF 4
+#define OUTPUT_BUFFER_ALLOCATE_FAILED 5
 
 // JNI references for FFmpegFrameBuffer class.
 static jmethodID initForRgbFrame;
@@ -16,6 +24,8 @@ static jmethodID initForYuvFrame;
 static jfieldID dataField;
 static jfieldID outputModeField;
 static jfieldID timeFrameUsField;
+
+static int lastErrorCode = NO_ERROR;
 
 void releaseContext(AVCodecContext *context);
 int decodePacket(AVCodecContext *context, AVPacket *packet,
@@ -94,22 +104,23 @@ void releaseContext(AVCodecContext *context) {
 }
 
 int decodePacket(AVCodecContext *context, AVPacket *packet) {
-    int result = 0;
     // Queue input data.
-    result = avcodec_send_packet(context, packet);
+    int errorCode = NO_ERROR;
+    int result = avcodec_send_packet(context, packet);
     if (result == AVERROR(EAGAIN)) {
-        return 3;
+        errorCode = DECODE_AGAIN;
     } else if (result != 0) {
-        return -1;
+        errorCode = DECODE_ERROR;
     }
-    return 0;
+    lastErrorCode = errorCode;
+    return errorCode;
 }
 
 int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
     jboolean initResult = env->CallBooleanMethod(
             jOutputBuffer, initForRgbFrame, frame->width, frame->height);
     if (initResult == JNI_FALSE) {
-        return -1;
+        return OUTPUT_BUFFER_ALLOCATE_FAILED;
     }
 
     // get pointer to the data buffer.
@@ -129,7 +140,7 @@ int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
                        (const uint8 *) frame->data[2],
                        frame->linesize[2],
                        (uint8 *) data, 2 * width, width, height);
-    return 0;
+    return NO_ERROR;
 }
 
 DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData, jint threadCount) {
@@ -137,16 +148,17 @@ DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData, jint t
     AVCodec *codec = getCodecByName(env, codecName);
     if (!codec) {
         LOGE("Codec not found.");
-        return 0L;
+        return 0;
     }
 
     initJavaRef(env);
     return (jlong) createContext(env, codec, extraData, threadCount);
 }
 
-DECODER_FUNC(jlong , ffmpegClose, jlong jContext) {
+DECODER_FUNC(jint , ffmpegClose, jlong jContext) {
     releaseContext((AVCodecContext*)jContext);
-    return 0;
+    lastErrorCode = NO_ERROR;
+    return lastErrorCode;
 }
 
 DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
@@ -154,7 +166,7 @@ DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
     avcodec_flush_buffers(context);
 }
 
-DECODER_FUNC(jlong, ffmpegDecode, jlong jContext, jobject encoded, jint len,
+DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
              jlong timeUs,
              jboolean isDecodeOnly,
              jboolean isEndOfStream) {
@@ -172,16 +184,18 @@ DECODER_FUNC(jlong, ffmpegDecode, jlong jContext, jobject encoded, jint len,
     }
 
     int result = decodePacket(context, &packet);
-    if (result == 0 && isEndOfStream) {
+    if (result == NO_ERROR && isEndOfStream) {
         result = decodePacket(context, NULL);
-        if (result == 3) {
-            result = 0;
+        if (result == DECODE_AGAIN) {
+            result = NO_ERROR;
         }
     }
+
+    lastErrorCode = result;
     return result;
 }
 
-DECODER_FUNC(jlong, ffmpegSecureDecode,
+DECODER_FUNC(jint , ffmpegSecureDecode,
              jlong jContext,
              jobject encoded,
              jint len,
@@ -195,7 +209,8 @@ DECODER_FUNC(jlong, ffmpegSecureDecode,
              jlong timeUs,
              jboolean isDecodeOnly,
              jboolean isEndOfStream) {
-    return -2;
+    lastErrorCode = UNSUPPORTED_ERROR;
+    return lastErrorCode;
 }
 
 DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
@@ -208,18 +223,20 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
         result = putFrame2OutputBuffer(env, holdFrame, jOutputBuffer);
     } else if (error == AVERROR(EAGAIN)){
         // packet还不够
-        result = 3;
+        result = DECODE_AGAIN;
     } else if (error == AVERROR_EOF) {
-        result = 4;
+        result = DECODE_EOF;
     } else {
-        result = 1;
+        result = DECODE_ERROR;
     }
     av_frame_free(&holdFrame);
+
+    lastErrorCode = result;
     return result;
 }
 
 DECODER_FUNC(jint , ffmpegGetErrorCode, jlong jContext) {
-    return 0;
+    return lastErrorCode;
 }
 
 DECODER_FUNC(jstring , ffmpegGetErrorMessage, jlong jContext) {
