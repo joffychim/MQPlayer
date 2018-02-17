@@ -240,8 +240,6 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
       }
 
       if (exception != null) {
-        // Memory barrier to ensure that the decoder exception is visible from the playback thread.
-        synchronized (lock) {}
         return false;
       }
     }
@@ -252,7 +250,8 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
 
     exception = getFrame(outputBuffer);
     if (exception != null) {
-      // Memory barrier to ensure that the decoder exception is visible from the playback thread.
+      // Memory barrier to ensure that the decoder
+      // exception is visible from the playback thread.
       synchronized (lock) {}
       return false;
     }

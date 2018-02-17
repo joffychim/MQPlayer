@@ -156,7 +156,7 @@ import java.util.List;
         if (getFrameResult == DECODE_AGAIN) {
             outputBuffer.addFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
         } else if (getFrameResult == OUTPUT_BUFFER_ALLOCATE_FAILED) {
-            return new FFmpegDecoderException("Buffer initialization failed.");
+            return new FFmpegDecoderException("failed to initialize buffer");
         } else if (getFrameResult != NO_ERROR && getFrameResult != DECODE_EOF) {
             outputBuffer.addFlag(C.BUFFER_FLAG_END_OF_STREAM);
             return new FFmpegDecoderException("failed to get next frame, error code:" + ffmpegGetErrorCode(ffmpegDecContext));
