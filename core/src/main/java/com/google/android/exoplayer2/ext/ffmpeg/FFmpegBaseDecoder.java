@@ -15,7 +15,6 @@
  */
 package com.google.android.exoplayer2.ext.ffmpeg;
 
-import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.decoder.Decoder;
 import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.util.Assertions;
@@ -41,6 +40,8 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   private boolean flushed;
   private boolean released;
   private int skippedOutputBufferCount;
+
+  private boolean maybeHasFrame = false;
 
   /**
    * @param inputBuffers An array of nulls that will be used to store references to input buffers.
@@ -195,8 +196,8 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   }
 
   private boolean decode() throws InterruptedException {
-    I inputBuffer;
-    O outputBuffer;
+    I inputBuffer = null;
+    O outputBuffer = null;
     boolean resetDecoder;
 
     // Wait until we have an input buffer to decode, and an output buffer to decode into.
@@ -207,19 +208,43 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
       if (released) {
         return false;
       }
-      inputBuffer = queuedInputBuffers.removeFirst();
-      outputBuffer = availableOutputBuffers[--availableOutputBufferCount];
+      if (queuedInputBuffers.size() > 0) {
+        inputBuffer = queuedInputBuffers.removeFirst();
+      } else {
+        inputBuffer = null;
+      }
+
+      if (maybeHasFrame) {
+        outputBuffer = availableOutputBuffers[--availableOutputBufferCount];
+        outputBuffer.timeUs = -1L;
+      }
+
       resetDecoder = flushed;
       flushed = false;
     }
 
-    if (inputBuffer.isEndOfStream()) {
-      outputBuffer.addFlag(C.BUFFER_FLAG_END_OF_STREAM);
-    } else {
-      if (inputBuffer.isDecodeOnly()) {
-        outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
+    if (resetDecoder) {
+      resetDecoder();
+    }
+
+    if (inputBuffer != null) {
+      boolean isEndOfStream = inputBuffer.isEndOfStream();
+      boolean isDecodeOnly = inputBuffer.isDecodeOnly();
+
+      // 发送packet
+      exception = sendPacket(inputBuffer, isDecodeOnly, isEndOfStream);
+      maybeHasFrame = true;
+
+      synchronized (lock) {
+        if (inputBuffer.hasFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN)) {
+          inputBuffer.clearFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN);
+          queuedInputBuffers.addFirst(inputBuffer);
+        } else {
+          // Make the input buffer available again.
+          releaseInputBufferInternal(inputBuffer);
+        }
       }
-      exception = decode(inputBuffer, outputBuffer, resetDecoder);
+
       if (exception != null) {
         // Memory barrier to ensure that the decoder exception is visible from the playback thread.
         synchronized (lock) {}
@@ -227,10 +252,25 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
       }
     }
 
+    if (outputBuffer == null) {
+      return true;
+    }
+
+    exception = getFrame(outputBuffer);
+    if (exception != null) {
+      // Memory barrier to ensure that the decoder exception is visible from the playback thread.
+      synchronized (lock) {}
+      return false;
+    }
+
+    if (outputBuffer.timeUs == -1L) {
+      maybeHasFrame = false;
+    }
+
     synchronized (lock) {
       if (flushed) {
         releaseOutputBufferInternal(outputBuffer);
-      } else if (outputBuffer.isDecodeOnly()) {
+      } else if (outputBuffer.timeUs == -1 || outputBuffer.isDecodeOnly()) {
         skippedOutputBufferCount++;
         releaseOutputBufferInternal(outputBuffer);
       } else {
@@ -238,21 +278,13 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
         skippedOutputBufferCount = 0;
         queuedOutputBuffers.addLast(outputBuffer);
       }
-
-      if (inputBuffer.hasFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN)) {
-        inputBuffer.clearFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN);
-        queuedInputBuffers.addFirst(inputBuffer);
-      } else {
-        // Make the input buffer available again.
-        releaseInputBufferInternal(inputBuffer);
-      }
     }
 
     return true;
   }
 
   private boolean canDecodeBuffer() {
-    return !queuedInputBuffers.isEmpty() && availableOutputBufferCount > 0;
+    return (maybeHasFrame || !queuedInputBuffers.isEmpty()) && availableOutputBufferCount > 0;
   }
 
   private void releaseInputBufferInternal(I inputBuffer) {
@@ -275,18 +307,7 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
    */
   protected abstract O createOutputBuffer();
 
-  /**
-   * Decodes the {@code inputBuffer} and stores any decoded output in {@code outputBuffer}.
-   *
-   * @param inputBuffer The buffer to decode.
-   * @param outputBuffer The output buffer to store decoded data. The flag
-   *     {@link C#BUFFER_FLAG_DECODE_ONLY} will be set if the same flag is set on
-   *     {@code inputBuffer}, but may be set/unset as required. If the flag is set when the call
-   *     returns then the output buffer will not be made available to dequeue. The output buffer
-   *     may not have been populated in this case.
-   * @param reset Whether the decoder must be reset before decoding.
-   * @return error code
-   **/
-  protected abstract E decode(I inputBuffer, O outputBuffer, boolean reset);
-
+  protected abstract void resetDecoder();
+  protected abstract E sendPacket(I inputBuffer, boolean decodeOnly, boolean endOfStream);
+  protected abstract E getFrame(O outputBuffer);
 }

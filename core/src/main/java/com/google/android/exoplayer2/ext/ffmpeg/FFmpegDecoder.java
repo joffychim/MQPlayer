@@ -69,6 +69,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
             throw new FFmpegDecoderException("FFmpeg decoder does not support secure decode.");
         }
         String mimeType = format.sampleMimeType;
+        // TODO 目前仅仅支持H264
         ffmpegDecContext = ffmpegInit("h264", getExtraData(mimeType, format.initializationData), Util.getCpuNumCores() + 1);
         if (ffmpegDecContext == 0) {
             throw new FFmpegDecoderException("Failed to initialize decoder");
@@ -102,21 +103,33 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
     }
 
     @Override
-    protected void releaseOutputBuffer(FFmpegFrameBuffer buffer) {
-        super.releaseOutputBuffer(buffer);
+    protected void resetDecoder() {
+        ffmpegFlushBuffers(ffmpegDecContext);
     }
 
     @Override
-    protected FFmpegDecoderException decode(FFmpegPacketBuffer inputBuffer, FFmpegFrameBuffer outputBuffer,
-                                            boolean reset) {
+    protected FFmpegDecoderException sendPacket(FFmpegPacketBuffer inputBuffer, boolean decodeOnly, boolean endOfStream) {
         ByteBuffer inputData = inputBuffer.data;
         int inputSize = inputData.limit();
         CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
         final long result = inputBuffer.isEncrypted()
-                ? ffmpegSecureDecode(ffmpegDecContext, inputData, inputSize, exoMediaCrypto,
-                cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
-                cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
-                : ffmpegDecode(ffmpegDecContext, inputData, inputSize, inputBuffer.timeUs);
+                ? ffmpegSecureDecode(ffmpegDecContext,
+                inputData,
+                inputSize,
+                exoMediaCrypto,
+                cryptoInfo.mode,
+                cryptoInfo.key,
+                cryptoInfo.iv,
+                cryptoInfo.numSubSamples,
+                cryptoInfo.numBytesOfClearData,
+                cryptoInfo.numBytesOfEncryptedData,
+                inputBuffer.timeUs,
+                endOfStream)
+                : ffmpegDecode(ffmpegDecContext,
+                inputData,
+                inputSize,
+                inputBuffer.timeUs,
+                endOfStream);
         if (result != NO_ERROR) {
             if (result == DRM_ERROR) {
                 String message = "Drm error: " + ffmpegGetErrorMessage(ffmpegDecContext);
@@ -129,15 +142,26 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
                 return new FFmpegDecoderException("Decode error: " + ffmpegGetErrorMessage(ffmpegDecContext));
             }
         }
+        return null;
+    }
 
+    @Override
+    protected FFmpegDecoderException getFrame(FFmpegFrameBuffer outputBuffer) {
         outputBuffer.init(outputMode);
         int getFrameResult = ffmpegGetFrame(ffmpegDecContext, outputBuffer);
-        if (getFrameResult == DECODE_ERROR || getFrameResult == DECODE_AGAIN) {
+        if (getFrameResult == DECODE_ERROR) {
             outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
+        } else if (getFrameResult == DECODE_AGAIN) {
+            outputBuffer.timeUs = -1L;
         } else if (getFrameResult == -1) {
             return new FFmpegDecoderException("Buffer initialization failed.");
         }
         return null;
+    }
+
+    @Override
+    protected void releaseOutputBuffer(FFmpegFrameBuffer buffer) {
+        super.releaseOutputBuffer(buffer);
     }
 
     @Override
@@ -174,11 +198,14 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
 
     private native void ffmpegFlushBuffers(long context);
 
-    private native long ffmpegDecode(long context, ByteBuffer encoded, int length, long timeUs);
+    private native long ffmpegDecode(long context, ByteBuffer encoded, int length, long timeUs, boolean isEndOfStream);
 
     private native long ffmpegSecureDecode(long context, ByteBuffer encoded, int length,
                                            ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
-                                           int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);
+                                           int numSubSamples, int[] numBytesOfClearData,
+                                           int[] numBytesOfEncryptedData,
+                                           long timeUs,
+                                           boolean isEndOfStream);
 
     private native int ffmpegGetFrame(long context, FFmpegFrameBuffer outputBuffer);
 
