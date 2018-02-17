@@ -134,14 +134,14 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
                 endOfStream);
         if (result != NO_ERROR) {
             if (result == DRM_ERROR) {
-                String message = "Drm error: " + ffmpegGetErrorMessage(ffmpegDecContext);
+                String message = "Drm error!!";
                 DecryptionException cause = new DecryptionException(
                         ffmpegGetErrorCode(ffmpegDecContext), message);
                 return new FFmpegDecoderException(message, cause);
             } else if (result == DECODE_AGAIN) {
                 inputBuffer.addFlag(BUFFER_FLAG_DECODE_AGAIN);
             } else {
-                return new FFmpegDecoderException("Decode error: " + ffmpegGetErrorMessage(ffmpegDecContext));
+                return new FFmpegDecoderException("failed to decode, error code: " + ffmpegGetErrorCode(ffmpegDecContext));
             }
         }
         return null;
@@ -156,7 +156,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
         } else if (getFrameResult == OUTPUT_BUFFER_ALLOCATE_FAILED) {
             return new FFmpegDecoderException("Buffer initialization failed.");
         } else if (getFrameResult != NO_ERROR && getFrameResult != DECODE_EOF) {
-            return new FFmpegDecoderException("GetFrame error: " + ffmpegGetErrorMessage(ffmpegDecContext));
+            return new FFmpegDecoderException("failed to get next frame, error code:" + ffmpegGetErrorCode(ffmpegDecContext));
         }
         return null;
     }
@@ -224,7 +224,4 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
     private native int ffmpegGetFrame(long context, FFmpegFrameBuffer outputBuffer);
 
     private native int ffmpegGetErrorCode(long context);
-
-    private native String ffmpegGetErrorMessage(long context);
-
 }

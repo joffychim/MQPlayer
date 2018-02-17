@@ -13,7 +13,6 @@ extern "C" {
 #define OTHER_ERROR -1
 #define NO_ERROR 0
 #define DECODE_ERROR 1
-#define DRM_ERROR 2
 #define DECODE_AGAIN 3
 #define DECODE_EOF 4
 #define OUTPUT_BUFFER_ALLOCATE_FAILED 5
@@ -25,7 +24,7 @@ static jfieldID dataField;
 static jfieldID outputModeField;
 static jfieldID timeFrameUsField;
 
-static int lastErrorCode = NO_ERROR;
+static int lastFFmpegErrorCode = 0;
 
 void releaseContext(AVCodecContext *context);
 int decodePacket(AVCodecContext *context, AVPacket *packet,
@@ -105,15 +104,16 @@ void releaseContext(AVCodecContext *context) {
 
 int decodePacket(AVCodecContext *context, AVPacket *packet) {
     // Queue input data.
-    int errorCode = NO_ERROR;
-    int result = avcodec_send_packet(context, packet);
-    if (result == AVERROR(EAGAIN)) {
-        errorCode = DECODE_AGAIN;
-    } else if (result != 0) {
-        errorCode = DECODE_ERROR;
+    int result = NO_ERROR;
+    int ffError = avcodec_send_packet(context, packet);
+    if (ffError == AVERROR(EAGAIN)) {
+        result = DECODE_AGAIN;
+    } else if (ffError != 0) {
+        result = DECODE_ERROR;
     }
-    lastErrorCode = errorCode;
-    return errorCode;
+
+    lastFFmpegErrorCode = ffError;
+    return result;
 }
 
 int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
@@ -157,8 +157,7 @@ DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData, jint t
 
 DECODER_FUNC(jint , ffmpegClose, jlong jContext) {
     releaseContext((AVCodecContext*)jContext);
-    lastErrorCode = NO_ERROR;
-    return lastErrorCode;
+    return NO_ERROR;
 }
 
 DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
@@ -191,7 +190,6 @@ DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
         }
     }
 
-    lastErrorCode = result;
     return result;
 }
 
@@ -209,8 +207,7 @@ DECODER_FUNC(jint , ffmpegSecureDecode,
              jlong timeUs,
              jboolean isDecodeOnly,
              jboolean isEndOfStream) {
-    lastErrorCode = UNSUPPORTED_ERROR;
-    return lastErrorCode;
+    return UNSUPPORTED_ERROR;
 }
 
 DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
@@ -231,14 +228,10 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     }
     av_frame_free(&holdFrame);
 
-    lastErrorCode = result;
+    lastFFmpegErrorCode = error;
     return result;
 }
 
 DECODER_FUNC(jint , ffmpegGetErrorCode, jlong jContext) {
-    return lastErrorCode;
-}
-
-DECODER_FUNC(jstring , ffmpegGetErrorMessage, jlong jContext) {
-    return env->NewStringUTF("");
+    return lastFFmpegErrorCode;
 }
