@@ -205,7 +205,7 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     AVFrame* holdFrame = av_frame_alloc();
     int error = avcodec_receive_frame(context, holdFrame);
     if (error == 0) {
-        putFrame2OutputBuffer(env, holdFrame, jOutputBuffer);
+        result = putFrame2OutputBuffer(env, holdFrame, jOutputBuffer);
     } else if (error == AVERROR(EAGAIN)){
         // packet还不够
         result = 3;

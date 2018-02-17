@@ -15,7 +15,6 @@
  */
 package com.google.android.exoplayer2.ext.ffmpeg;
 
-import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
 import com.google.android.exoplayer2.drm.DecryptionException;
@@ -38,6 +37,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
     static final int OUTPUT_MODE_RGB = 1;
 
     private static final int NO_ERROR = 0;
+    private static final int OUTPUT_BUFFER_ALLOCATE_FAILED = -1;
     private static final int DECODE_ERROR = 1;
     private static final int DRM_ERROR = 2;
     private static final int DECODE_AGAIN = 3;
@@ -151,12 +151,12 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
     protected FFmpegDecoderException getFrame(FFmpegFrameBuffer outputBuffer) {
         outputBuffer.init(outputMode);
         int getFrameResult = ffmpegGetFrame(ffmpegDecContext, outputBuffer);
-        if (getFrameResult == DECODE_ERROR) {
-            outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
-        } else if (getFrameResult == DECODE_AGAIN) {
+        if (getFrameResult == DECODE_AGAIN) {
             outputBuffer.timeUs = -1L;
-        } else if (getFrameResult == -1) {
+        } else if (getFrameResult == OUTPUT_BUFFER_ALLOCATE_FAILED) {
             return new FFmpegDecoderException("Buffer initialization failed.");
+        } else if (getFrameResult != NO_ERROR) {
+            return new FFmpegDecoderException("GetFrame error: " + ffmpegGetErrorMessage(ffmpegDecContext));
         }
         return null;
     }
