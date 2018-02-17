@@ -23,8 +23,6 @@ import com.google.android.exoplayer2.video.ColorInfo;
  */
 /* package */ final class FFmpegPacketBuffer extends DecoderInputBuffer {
 
-  public static final int BUFFER_FLAG_DECODE_AGAIN = 0x00800000;
-
   public ColorInfo colorInfo;
 
   public FFmpegPacketBuffer() {

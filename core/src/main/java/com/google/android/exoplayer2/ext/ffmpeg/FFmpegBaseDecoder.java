@@ -214,7 +214,6 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
 
       if (maybeHasFrame) {
         outputBuffer = availableOutputBuffers[--availableOutputBufferCount];
-        outputBuffer.timeUs = -1L;
       }
 
       resetDecoder = flushed;
@@ -230,8 +229,8 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
       exception = sendPacket(inputBuffer);
 
       synchronized (lock) {
-        if (inputBuffer.hasFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN)) {
-          inputBuffer.clearFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN);
+        if (inputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN)) {
+          inputBuffer.clearFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
           queuedInputBuffers.addFirst(inputBuffer);
         } else {
           // Make the input buffer available again.
@@ -259,7 +258,7 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
     }
 
     synchronized (lock) {
-      if (flushed || outputBuffer.timeUs == -1) {
+      if (flushed || outputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN)) {
         releaseOutputBufferInternal(outputBuffer);
         maybeHasFrame = false;
       } else if (outputBuffer.isDecodeOnly()) {

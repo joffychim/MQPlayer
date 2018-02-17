@@ -141,4 +141,7 @@ import java.nio.ByteBuffer;
     return a >= 0 && b >= 0 && !(b > 0 && a >= Integer.MAX_VALUE / b);
   }
 
+  public boolean hasFlag(int flag) {
+    return getFlag(flag);
+  }
 }

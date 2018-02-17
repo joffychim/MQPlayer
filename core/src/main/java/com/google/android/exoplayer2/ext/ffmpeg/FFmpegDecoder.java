@@ -15,6 +15,7 @@
  */
 package com.google.android.exoplayer2.ext.ffmpeg;
 
+import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
 import com.google.android.exoplayer2.drm.DecryptionException;
@@ -23,8 +24,6 @@ import com.google.android.exoplayer2.util.MimeTypes;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-
-import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN;
 
 /**
  * ffmpeg decoder.
@@ -142,7 +141,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
                         ffmpegGetErrorCode(ffmpegDecContext), message);
                 return new FFmpegDecoderException(message, cause);
             } else if (result == DECODE_AGAIN) {
-                inputBuffer.addFlag(BUFFER_FLAG_DECODE_AGAIN);
+                inputBuffer.addFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
             } else {
                 return new FFmpegDecoderException("failed to decode, error code: " + ffmpegGetErrorCode(ffmpegDecContext));
             }
@@ -155,10 +154,11 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
         outputBuffer.init(outputMode);
         int getFrameResult = ffmpegGetFrame(ffmpegDecContext, outputBuffer);
         if (getFrameResult == DECODE_AGAIN) {
-            outputBuffer.timeUs = -1L;
+            outputBuffer.addFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
         } else if (getFrameResult == OUTPUT_BUFFER_ALLOCATE_FAILED) {
             return new FFmpegDecoderException("Buffer initialization failed.");
         } else if (getFrameResult != NO_ERROR && getFrameResult != DECODE_EOF) {
+            outputBuffer.addFlag(C.BUFFER_FLAG_END_OF_STREAM);
             return new FFmpegDecoderException("failed to get next frame, error code:" + ffmpegGetErrorCode(ffmpegDecContext));
         }
         return null;
