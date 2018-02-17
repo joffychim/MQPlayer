@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef INCLUDE_LIBYUV_H_  // NOLINT
+#ifndef INCLUDE_LIBYUV_H_
 #define INCLUDE_LIBYUV_H_
 
 #include "libyuv/basic_types.h"
@@ -18,7 +18,6 @@
 #include "libyuv/convert_from.h"
 #include "libyuv/convert_from_argb.h"
 #include "libyuv/cpu_id.h"
-#include "libyuv/mjpeg_decoder.h"
 #include "libyuv/planar_functions.h"
 #include "libyuv/rotate.h"
 #include "libyuv/rotate_argb.h"
@@ -29,4 +28,4 @@
 #include "libyuv/version.h"
 #include "libyuv/video_common.h"
 
-#endif  // INCLUDE_LIBYUV_H_  NOLINT
+#endif  // INCLUDE_LIBYUV_H_
