@@ -16,27 +16,25 @@
 package com.google.android.exoplayer2.ext.ffmpeg;
 
 import com.google.android.exoplayer2.decoder.Decoder;
-import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.util.Assertions;
 
 import java.util.LinkedList;
 
-public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends OutputBuffer,
-    E extends Exception> implements Decoder<I, O, E> {
+public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, FFmpegFrameBuffer, FFmpegDecoderException> {
 
   private final Thread decodeThread;
 
   private final Object lock;
-  private final LinkedList<I> queuedInputBuffers;
-  private final LinkedList<O> queuedOutputBuffers;
-  private final I[] availableInputBuffers;
-  private final O[] availableOutputBuffers;
+  private final LinkedList<FFmpegPacketBuffer> queuedInputBuffers;
+  private final LinkedList<FFmpegFrameBuffer> queuedOutputBuffers;
+  private final FFmpegPacketBuffer[] availableInputBuffers;
+  private final FFmpegFrameBuffer[] availableOutputBuffers;
 
   private int availableInputBufferCount;
   private int availableOutputBufferCount;
-  private I dequeuedInputBuffer;
+  private FFmpegPacketBuffer dequeuedInputBuffer;
 
-  private E exception;
+  private FFmpegDecoderException exception;
   private boolean flushed;
   private boolean released;
   private int skippedOutputBufferCount;
@@ -47,7 +45,7 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
    * @param inputBuffers An array of nulls that will be used to store references to input buffers.
    * @param outputBuffers An array of nulls that will be used to store references to output buffers.
    */
-  protected FFmpegBaseDecoder(I[] inputBuffers, O[] outputBuffers) {
+  protected FFmpegBaseDecoder(FFmpegPacketBuffer[] inputBuffers, FFmpegFrameBuffer[] outputBuffers) {
     lock = new Object();
     queuedInputBuffers = new LinkedList<>();
     queuedOutputBuffers = new LinkedList<>();
@@ -80,13 +78,13 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
    */
   protected final void setInitialInputBufferSize(int size) {
     Assertions.checkState(availableInputBufferCount == availableInputBuffers.length);
-    for (I inputBuffer : availableInputBuffers) {
+    for (FFmpegPacketBuffer inputBuffer : availableInputBuffers) {
       inputBuffer.ensureSpaceForWrite(size);
     }
   }
 
   @Override
-  public final I dequeueInputBuffer() throws E {
+  public final FFmpegPacketBuffer dequeueInputBuffer() throws FFmpegDecoderException {
     synchronized (lock) {
       maybeThrowException();
       Assertions.checkState(dequeuedInputBuffer == null);
@@ -97,7 +95,7 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   }
 
   @Override
-  public final void queueInputBuffer(I inputBuffer) throws E {
+  public final void queueInputBuffer(FFmpegPacketBuffer inputBuffer) throws FFmpegDecoderException {
     synchronized (lock) {
       maybeThrowException();
       Assertions.checkArgument(inputBuffer == dequeuedInputBuffer);
@@ -108,7 +106,7 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   }
 
   @Override
-  public final O dequeueOutputBuffer() throws E {
+  public final FFmpegFrameBuffer dequeueOutputBuffer() throws FFmpegDecoderException {
     synchronized (lock) {
       maybeThrowException();
       if (queuedOutputBuffers.isEmpty()) {
@@ -123,7 +121,7 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
    *
    * @param outputBuffer The output buffer being released.
    */
-  protected void releaseOutputBuffer(O outputBuffer) {
+  protected void releaseOutputBuffer(FFmpegFrameBuffer outputBuffer) {
     synchronized (lock) {
       releaseOutputBufferInternal(outputBuffer);
       maybeNotifyDecodeLoop();
@@ -164,9 +162,9 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   /**
    * Throws a decode exception, if there is one.
    *
-   * @throws E The decode exception.
+   * @throws FFmpegDecoderException The decode exception.
    */
-  private void maybeThrowException() throws E {
+  private void maybeThrowException() throws FFmpegDecoderException {
     if (exception != null) {
       throw exception;
     }
@@ -196,8 +194,8 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   }
 
   private boolean decode() throws InterruptedException {
-    I inputBuffer = null;
-    O outputBuffer = null;
+    FFmpegPacketBuffer inputBuffer = null;
+    FFmpegFrameBuffer outputBuffer = null;
     boolean resetDecoder;
 
     // Wait until we have an input buffer to decode, and an output buffer to decode into.
@@ -228,12 +226,8 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
     }
 
     if (inputBuffer != null) {
-      boolean isEndOfStream = inputBuffer.isEndOfStream();
-      boolean isDecodeOnly = inputBuffer.isDecodeOnly();
-
       // 发送packet
-      exception = sendPacket(inputBuffer, isDecodeOnly, isEndOfStream);
-      maybeHasFrame = true;
+      exception = sendPacket(inputBuffer);
 
       synchronized (lock) {
         if (inputBuffer.hasFlag(FFmpegPacketBuffer.BUFFER_FLAG_DECODE_AGAIN)) {
@@ -242,6 +236,7 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
         } else {
           // Make the input buffer available again.
           releaseInputBufferInternal(inputBuffer);
+          maybeHasFrame = true;
         }
       }
 
@@ -263,14 +258,11 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
       return false;
     }
 
-    if (outputBuffer.timeUs == -1L) {
-      maybeHasFrame = false;
-    }
-
     synchronized (lock) {
-      if (flushed) {
+      if (flushed || outputBuffer.timeUs == -1) {
         releaseOutputBufferInternal(outputBuffer);
-      } else if (outputBuffer.timeUs == -1 || outputBuffer.isDecodeOnly()) {
+        maybeHasFrame = false;
+      } else if (outputBuffer.isDecodeOnly()) {
         skippedOutputBufferCount++;
         releaseOutputBufferInternal(outputBuffer);
       } else {
@@ -287,12 +279,12 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
     return (maybeHasFrame || !queuedInputBuffers.isEmpty()) && availableOutputBufferCount > 0;
   }
 
-  private void releaseInputBufferInternal(I inputBuffer) {
+  private void releaseInputBufferInternal(FFmpegPacketBuffer inputBuffer) {
     inputBuffer.clear();
     availableInputBuffers[availableInputBufferCount++] = inputBuffer;
   }
 
-  private void releaseOutputBufferInternal(O outputBuffer) {
+  private void releaseOutputBufferInternal(FFmpegFrameBuffer outputBuffer) {
     outputBuffer.clear();
     availableOutputBuffers[availableOutputBufferCount++] = outputBuffer;
   }
@@ -300,14 +292,14 @@ public abstract class FFmpegBaseDecoder<I extends FFmpegPacketBuffer, O extends 
   /**
    * Creates a new input buffer.
    */
-  protected abstract I createInputBuffer();
+  protected abstract FFmpegPacketBuffer createInputBuffer();
 
   /**
    * Creates a new output buffer.
    */
-  protected abstract O createOutputBuffer();
+  protected abstract FFmpegFrameBuffer createOutputBuffer();
 
   protected abstract void resetDecoder();
-  protected abstract E sendPacket(I inputBuffer, boolean decodeOnly, boolean endOfStream);
-  protected abstract E getFrame(O outputBuffer);
+  protected abstract FFmpegDecoderException sendPacket(FFmpegPacketBuffer inputBuffer);
+  protected abstract FFmpegDecoderException getFrame(FFmpegFrameBuffer outputBuffer);
 }

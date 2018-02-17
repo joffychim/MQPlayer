@@ -29,8 +29,7 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
 /**
  * ffmpeg decoder.
  */
-/* package */ final class FFmpegDecoder extends
-        FFmpegBaseDecoder<FFmpegPacketBuffer, FFmpegFrameBuffer, FFmpegDecoderException> {
+/* package */ final class FFmpegDecoder extends FFmpegBaseDecoder {
 
     static final int OUTPUT_MODE_NONE = -1;
     static final int OUTPUT_MODE_YUV = 0;
@@ -108,7 +107,11 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
     }
 
     @Override
-    protected FFmpegDecoderException sendPacket(FFmpegPacketBuffer inputBuffer, boolean decodeOnly, boolean endOfStream) {
+    protected FFmpegDecoderException sendPacket(FFmpegPacketBuffer inputBuffer) {
+
+        boolean isEndOfStream = inputBuffer.isEndOfStream();
+        boolean isDecodeOnly = inputBuffer.isDecodeOnly();
+
         ByteBuffer inputData = inputBuffer.data;
         int inputSize = inputData.limit();
         CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
@@ -124,14 +127,14 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
                 cryptoInfo.numBytesOfClearData,
                 cryptoInfo.numBytesOfEncryptedData,
                 inputBuffer.timeUs,
-                decodeOnly,
-                endOfStream)
+                isDecodeOnly,
+                isEndOfStream)
                 : ffmpegDecode(ffmpegDecContext,
                 inputData,
                 inputSize,
                 inputBuffer.timeUs,
-                decodeOnly,
-                endOfStream);
+                isDecodeOnly,
+                isEndOfStream);
         if (result != NO_ERROR) {
             if (result == DRM_ERROR) {
                 String message = "Drm error!!";
