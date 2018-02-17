@@ -357,8 +357,8 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   }
 
   private void renderBuffer() {
-    // 只是解码，就不展示
-    if (outputBuffer.isDecodeOnly()) {
+    // 软解带endofstream标志的buffer是没有实际数据的
+    if (outputBuffer.isEndOfStream()) {
       outputBuffer = null;
       return;
     }

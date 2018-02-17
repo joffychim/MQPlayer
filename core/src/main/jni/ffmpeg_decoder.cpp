@@ -227,7 +227,6 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
         result = DECODE_ERROR;
     }
     av_frame_free(&holdFrame);
-
     lastFFmpegErrorCode = error;
     return result;
 }

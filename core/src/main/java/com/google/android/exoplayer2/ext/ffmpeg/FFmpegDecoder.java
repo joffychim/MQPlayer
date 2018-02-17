@@ -158,8 +158,7 @@ import java.util.List;
         } else if (getFrameResult == OUTPUT_BUFFER_ALLOCATE_FAILED) {
             return new FFmpegDecoderException("failed to initialize buffer");
         } else if (getFrameResult == DECODE_EOF) {
-            outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY |
-                    C.BUFFER_FLAG_END_OF_STREAM);
+            outputBuffer.addFlag(C.BUFFER_FLAG_END_OF_STREAM);
         } else if (getFrameResult != NO_ERROR) {
             return new FFmpegDecoderException("failed to get next frame, error code:" + ffmpegGetErrorCode(ffmpegDecContext));
         }
