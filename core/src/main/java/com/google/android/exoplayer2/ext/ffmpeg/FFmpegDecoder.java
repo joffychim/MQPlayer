@@ -124,11 +124,13 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
                 cryptoInfo.numBytesOfClearData,
                 cryptoInfo.numBytesOfEncryptedData,
                 inputBuffer.timeUs,
+                decodeOnly,
                 endOfStream)
                 : ffmpegDecode(ffmpegDecContext,
                 inputData,
                 inputSize,
                 inputBuffer.timeUs,
+                decodeOnly,
                 endOfStream);
         if (result != NO_ERROR) {
             if (result == DRM_ERROR) {
@@ -198,13 +200,25 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegPacketBuffer.BUFFER
 
     private native void ffmpegFlushBuffers(long context);
 
-    private native long ffmpegDecode(long context, ByteBuffer encoded, int length, long timeUs, boolean isEndOfStream);
+    private native long ffmpegDecode(long context,
+                                     ByteBuffer encoded,
+                                     int length,
+                                     long timeUs,
+                                     boolean isDecodeOnly,
+                                     boolean isEndOfStream);
 
-    private native long ffmpegSecureDecode(long context, ByteBuffer encoded, int length,
-                                           ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
-                                           int numSubSamples, int[] numBytesOfClearData,
+    private native long ffmpegSecureDecode(long context,
+                                           ByteBuffer encoded,
+                                           int length,
+                                           ExoMediaCrypto mediaCrypto,
+                                           int inputMode,
+                                           byte[] key,
+                                           byte[] iv,
+                                           int numSubSamples,
+                                           int[] numBytesOfClearData,
                                            int[] numBytesOfEncryptedData,
                                            long timeUs,
+                                           boolean isDecodeOnly,
                                            boolean isEndOfStream);
 
     private native int ffmpegGetFrame(long context, FFmpegFrameBuffer outputBuffer);

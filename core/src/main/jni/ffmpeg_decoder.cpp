@@ -156,17 +156,20 @@ DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
 
 DECODER_FUNC(jlong, ffmpegDecode, jlong jContext, jobject encoded, jint len,
              jlong timeUs,
+             jboolean isDecodeOnly,
              jboolean isEndOfStream) {
     AVCodecContext* context = (AVCodecContext*)jContext;
     uint8_t *packetBuffer = (uint8_t *) env->GetDirectBufferAddress(encoded);
 
-    // TODO send endofstream
     AVPacket packet;
     av_init_packet(&packet);
     packet.data = packetBuffer;
     packet.size = len;
 
     packet.pts = timeUs;
+    if (isDecodeOnly) {
+        packet.flags &= AV_PKT_FLAG_DISCARD;
+    }
 
     int result = decodePacket(context, &packet);
     if (result == 0 && isEndOfStream) {
@@ -190,6 +193,7 @@ DECODER_FUNC(jlong, ffmpegSecureDecode,
              jintArray numBytesOfClearData,
              jintArray numBytesOfEncryptedData,
              jlong timeUs,
+             jboolean isDecodeOnly,
              jboolean isEndOfStream) {
     return -2;
 }
