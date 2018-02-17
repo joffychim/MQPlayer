@@ -357,6 +357,12 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   }
 
   private void renderBuffer() {
+    // 只是解码，就不展示
+    if (outputBuffer.isDecodeOnly()) {
+      outputBuffer = null;
+      return;
+    }
+
     int bufferMode = outputBuffer.mode;
     boolean renderRgb = bufferMode == FFmpegDecoder.OUTPUT_MODE_RGB && surface != null;
     boolean renderYuv = bufferMode == FFmpegDecoder.OUTPUT_MODE_YUV && outputBufferRenderer != null;

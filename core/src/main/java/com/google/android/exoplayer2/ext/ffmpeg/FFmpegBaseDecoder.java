@@ -260,7 +260,7 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
       if (flushed || outputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN)) {
         releaseOutputBufferInternal(outputBuffer);
         maybeHasFrame = false;
-      } else if (outputBuffer.isDecodeOnly()) {
+      } else if (!outputBuffer.isEndOfStream() && outputBuffer.isDecodeOnly()) {
         skippedOutputBufferCount++;
         releaseOutputBufferInternal(outputBuffer);
       } else {
