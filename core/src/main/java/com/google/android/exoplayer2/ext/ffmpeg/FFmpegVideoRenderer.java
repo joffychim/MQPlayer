@@ -201,6 +201,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     if (!FFmpegLibrary.isAvailable() ||
             !(MimeTypes.VIDEO_MP4.equalsIgnoreCase(format.sampleMimeType)
             || MimeTypes.VIDEO_H264.equalsIgnoreCase(format.sampleMimeType)
+            || MimeTypes.VIDEO_H265.equalsIgnoreCase(format.sampleMimeType)
             || MimeTypes.VIDEO_MPEG.equalsIgnoreCase(format.sampleMimeType)
             || MimeTypes.VIDEO_MPEG2.equalsIgnoreCase(format.sampleMimeType))
             ) {

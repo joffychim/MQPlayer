@@ -67,8 +67,15 @@ import java.util.List;
             throw new FFmpegDecoderException("FFmpeg decoder does not support secure decode.");
         }
         String mimeType = format.sampleMimeType;
-        // TODO 目前仅仅支持H264
-        ffmpegDecContext = ffmpegInit("h264", getExtraData(mimeType, format.initializationData), Util.getCpuNumCores() + 1);
+        String codecName;
+        if (mimeType.equals(MimeTypes.VIDEO_H264)) {
+            codecName = "h264";
+        } else if (mimeType.equals(MimeTypes.VIDEO_H265)) {
+            codecName = "h265";
+        } else {
+            throw new FFmpegDecoderException("Unsupported mimetype:" + mimeType);
+        }
+        ffmpegDecContext = ffmpegInit(codecName, getExtraData(mimeType, format.initializationData), Util.getCpuNumCores() + 1);
         if (ffmpegDecContext == 0) {
             throw new FFmpegDecoderException("Failed to initialize decoder");
         }
@@ -177,25 +184,29 @@ import java.util.List;
     }
 
     private static byte[] getExtraData(String mimeType, List<byte[]> initializationData) {
-        switch (mimeType) {
-            case MimeTypes.VIDEO_MP4:
-            case MimeTypes.VIDEO_H264:
-                byte[] header0 = initializationData.get(0);
-                byte[] header1 = initializationData.get(1);
-                byte[] extraData = new byte[header0.length + header1.length + 6];
-                extraData[0] = (byte) (header0.length >> 8);
-                extraData[1] = (byte) (header0.length & 0xFF);
-                System.arraycopy(header0, 0, extraData, 2, header0.length);
-                extraData[header0.length + 2] = 0;
-                extraData[header0.length + 3] = 0;
-                extraData[header0.length + 4] = (byte) (header1.length >> 8);
-                extraData[header0.length + 5] = (byte) (header1.length & 0xFF);
-                System.arraycopy(header1, 0, extraData, header0.length + 6, header1.length);
-                return extraData;
-            default:
-                // Other codecs do not require extra data.
-                return null;
+        int extraDataLength = 0;
+        for (byte[] data : initializationData) {
+            // 加2个分割
+            if (extraDataLength != 0) {
+                extraDataLength += 2;
+            }
+            extraDataLength += data.length + 2;
         }
+
+        byte[] extraData = new byte[extraDataLength];
+        int currentPos = 0;
+        for (byte[] data : initializationData) {
+            if (currentPos != 0) {
+                extraData[currentPos] = 0;
+                extraData[currentPos + 1] = 0;
+                currentPos += 2;
+            }
+            extraData[currentPos] = (byte) (data.length >> 8);
+            extraData[currentPos + 1] = (byte) (data.length & 0xFF);
+            System.arraycopy(data, 0, extraData, currentPos + 2, data.length);
+            currentPos += data.length + 2;
+        }
+        return extraData;
     }
 
     private native long ffmpegInit(String codecName, byte[] extraData, int threadCount);
