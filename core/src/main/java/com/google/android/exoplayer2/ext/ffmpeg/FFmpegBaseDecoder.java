@@ -59,7 +59,7 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
     for (int i = 0; i < availableOutputBufferCount; i++) {
       availableOutputBuffers[i] = createOutputBuffer();
     }
-    decodeThread = new Thread() {
+    decodeThread = new Thread("ffmpeg-decoder") {
       @Override
       public void run() {
         FFmpegBaseDecoder.this.run();
@@ -206,13 +206,14 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
       if (released) {
         return false;
       }
+
       if (queuedInputBuffers.size() > 0) {
         inputBuffer = queuedInputBuffers.removeFirst();
       } else {
         inputBuffer = null;
       }
 
-      if (maybeHasFrame) {
+      if (maybeHasFrame && availableOutputBufferCount > 0) {
         outputBuffer = availableOutputBuffers[--availableOutputBufferCount];
       }
 
@@ -227,10 +228,13 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
     if (inputBuffer != null) {
       // 发送packet
       exception = sendPacket(inputBuffer);
+      boolean needSendAgain = inputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
+      if (needSendAgain) {
+        inputBuffer.clearFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
+      }
 
       synchronized (lock) {
-        if (inputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN)) {
-          inputBuffer.clearFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
+        if (needSendAgain) {
           queuedInputBuffers.addFirst(inputBuffer);
         } else {
           // Make the input buffer available again.
@@ -250,23 +254,28 @@ public abstract class FFmpegBaseDecoder implements Decoder<FFmpegPacketBuffer, F
 
     exception = getFrame(outputBuffer);
     if (exception != null) {
-      // Memory barrier to ensure that the decoder
-      // exception is visible from the playback thread.
-      synchronized (lock) {}
+      synchronized (lock) {
+        releaseOutputBufferInternal(outputBuffer);
+      }
       return false;
     }
 
+    boolean frameIsReady = !outputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);
+    boolean frameIsIgnored = outputBuffer.isDecodeOnly();
+
     synchronized (lock) {
-      if (flushed || outputBuffer.hasFlag(Constant.BUFFER_FLAG_DECODE_AGAIN)) {
+      if (flushed || !frameIsReady) {
         releaseOutputBufferInternal(outputBuffer);
         maybeHasFrame = false;
-      } else if (outputBuffer.isDecodeOnly()) {
+      } else if (frameIsIgnored) {
         skippedOutputBufferCount++;
         releaseOutputBufferInternal(outputBuffer);
       } else {
         outputBuffer.skippedOutputBufferCount = skippedOutputBufferCount;
         skippedOutputBufferCount = 0;
         queuedOutputBuffers.addLast(outputBuffer);
+        // 取出最后一帧后需要重置maybeHasFrame为false
+        maybeHasFrame = !outputBuffer.isEndOfStream();
       }
     }
 
