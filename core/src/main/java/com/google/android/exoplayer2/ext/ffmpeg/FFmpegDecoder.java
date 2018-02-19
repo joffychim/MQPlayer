@@ -75,7 +75,15 @@ import java.util.List;
         } else {
             throw new FFmpegDecoderException("Unsupported mimetype:" + mimeType);
         }
-        ffmpegDecContext = ffmpegInit(codecName, getExtraData(mimeType, format.initializationData), Util.getCpuNumCores() + 1);
+
+        int width = format.width;
+        int height = format.height;
+
+        ffmpegDecContext = ffmpegInit(codecName,
+                width,
+                height,
+                getExtraData(mimeType, format.initializationData),
+                Util.getCpuNumCores() + 1);
         if (ffmpegDecContext == 0) {
             throw new FFmpegDecoderException("Failed to initialize decoder");
         }
@@ -193,6 +201,10 @@ import java.util.List;
             extraDataLength += data.length + 2;
         }
 
+        if (extraDataLength == 0) {
+            return null;
+        }
+
         byte[] extraData = new byte[extraDataLength];
         int currentPos = 0;
         for (byte[] data : initializationData) {
@@ -209,7 +221,8 @@ import java.util.List;
         return extraData;
     }
 
-    private native long ffmpegInit(String codecName, byte[] extraData, int threadCount);
+    private native long ffmpegInit(String codecName, int width, int height,
+                                   byte[] extraData, int threadCount);
 
     private native int ffmpegClose(long context);
 

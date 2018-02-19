@@ -209,6 +209,12 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     } else if (!supportsFormatDrm(drmSessionManager, format.drmInitData)) {
       return FORMAT_UNSUPPORTED_DRM;
     }
+
+    // ffmpeg解码需要
+    if (format.initializationData == null || format.initializationData.size() <= 0) {
+      return FORMAT_EXCEEDS_CAPABILITIES;
+    }
+
     return FORMAT_HANDLED | ADAPTIVE_SEAMLESS;
   }
 

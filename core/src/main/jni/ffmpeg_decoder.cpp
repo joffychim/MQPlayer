@@ -49,13 +49,14 @@ AVCodec *getCodecByName(JNIEnv* env, jstring codecName) {
 }
 
 AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
+                              jint  width, jint height,
                               jbyteArray extraData, jint threadCount) {
     AVCodecContext *context = avcodec_alloc_context3(codec);
     if (!context) {
         LOGE("Failed to allocate avcodec context.");
         return NULL;
     }
-    if (extraData) {
+    if (extraData != NULL) {
         jsize size = env->GetArrayLength(extraData);
         context->extradata_size = size;
         context->extradata =
@@ -77,6 +78,10 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
         releaseContext(context);
         return NULL;
     }
+
+    context->width = width;
+    context->height = height;
+
     return context;
 }
 
@@ -143,7 +148,8 @@ int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
     return NO_ERROR;
 }
 
-DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData, jint threadCount) {
+DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jint  width,
+             jint height, jbyteArray extraData, jint threadCount) {
     avcodec_register_all();
     AVCodec *codec = getCodecByName(env, codecName);
     if (!codec) {
@@ -152,7 +158,7 @@ DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jbyteArray extraData, jint t
     }
 
     initJavaRef(env);
-    return (jlong) createContext(env, codec, extraData, threadCount);
+    return (jlong) createContext(env, codec, width, height, extraData, threadCount);
 }
 
 DECODER_FUNC(jint , ffmpegClose, jlong jContext) {
