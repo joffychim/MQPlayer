@@ -21,7 +21,7 @@ import com.google.android.exoplayer2.video.ColorInfo;
 /**
  * Input buffer to a {@link FFmpegDecoder}.
  */
-/* package */ final class FFmpegPacketBuffer extends DecoderInputBuffer {
+final class FFmpegPacketBuffer extends DecoderInputBuffer {
 
   public ColorInfo colorInfo;
 

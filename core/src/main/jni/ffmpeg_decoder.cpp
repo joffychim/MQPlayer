@@ -27,6 +27,7 @@ static jfieldID outputModeField;
 static jfieldID timeFrameUsField;
 
 static int lastFFmpegErrorCode = 0;
+static AVFrame* holdFrame = NULL;
 
 // 打印错误
 void logError(const char *functionName, int errorNumber);
@@ -43,7 +44,7 @@ void releaseContext(AVCodecContext *context);
 // 解码相应packet
 int decodePacket(AVCodecContext *context, AVPacket *packet);
 // 把解码后的frame放入到outputBuffer
-int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer);
+int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer);
 
 DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jint  width,
              jint height, jbyteArray extraData, jint threadCount) {
@@ -59,7 +60,11 @@ DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jint  width,
 }
 
 DECODER_FUNC(jint , ffmpegClose, jlong jContext) {
-    releaseContext((AVCodecContext*)jContext);
+    AVCodecContext* pCodecContext = (AVCodecContext*)jContext;
+    releaseContext(pCodecContext);
+    if (holdFrame != NULL) {
+        av_frame_free(&holdFrame);
+    }
     return NO_ERROR;
 }
 
@@ -117,10 +122,13 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     int result = 0;
     AVCodecContext* context = (AVCodecContext*)jContext;
 
-    AVFrame* holdFrame = av_frame_alloc();
+    if (holdFrame == NULL) {
+        holdFrame = av_frame_alloc();
+    }
+
     int error = avcodec_receive_frame(context, holdFrame);
     if (error == 0) {
-        result = putFrame2OutputBuffer(env, holdFrame, jOutputBuffer);
+        result = putFrameToOutputBuffer(env, holdFrame, jOutputBuffer);
     } else if (error == AVERROR(EAGAIN)){
         // packet还不够
         result = DECODE_AGAIN;
@@ -129,7 +137,6 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     } else {
         result = DECODE_ERROR;
     }
-    av_frame_free(&holdFrame);
     lastFFmpegErrorCode = error;
     return result;
 }
@@ -177,7 +184,7 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
     }
     AVDictionary *opts = NULL;
     av_dict_set_int(&opts, "threads", threadCount, 0);
-    av_dict_set_int(&opts, "lowres", true, 0);
+    //av_dict_set_int(&opts, "lowres", true, 0);
 
     int result = avcodec_open2(context, codec, &opts);
     if (result < 0) {
@@ -207,11 +214,15 @@ void initJavaRef(JNIEnv *env) {
     timeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
 }
 
-void releaseContext(AVCodecContext *context) {
-    if (!context) {
+void releaseContext(AVCodecContext *pCodecContext) {
+    if (!pCodecContext) {
         return;
     }
-    avcodec_free_context(&context);
+    if (pCodecContext->extradata != NULL) {
+        av_free(pCodecContext->extradata);
+        pCodecContext->extradata = NULL;
+    }
+    avcodec_free_context(&pCodecContext);
 }
 
 int decodePacket(AVCodecContext *context, AVPacket *packet) {
@@ -228,7 +239,7 @@ int decodePacket(AVCodecContext *context, AVPacket *packet) {
     return result;
 }
 
-int putFrame2OutputBuffer(JNIEnv *env, AVFrame* frame, jobject jOutputBuffer) {
+int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
     jboolean initResult = env->CallBooleanMethod(
             jOutputBuffer, initForRgbFrame, frame->width, frame->height);
     if (initResult == JNI_FALSE) {
