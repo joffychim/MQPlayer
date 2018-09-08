@@ -21,6 +21,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.support.annotation.IntDef;
+import android.util.Log;
 import android.view.Surface;
 
 import com.google.android.exoplayer2.BaseRenderer;
@@ -50,6 +51,8 @@ import java.lang.annotation.RetentionPolicy;
  * Decodes and renders video using the ffmpeg decoder.
  */
 public final class FFmpegVideoRenderer extends BaseRenderer {
+  @SuppressWarnings("unused")
+  private static final String TAG = "FFmpegVideoRenderer";
 
   @Retention(RetentionPolicy.SOURCE)
   @IntDef({REINITIALIZATION_STATE_NONE, REINITIALIZATION_STATE_SIGNAL_END_OF_STREAM,
@@ -563,12 +566,16 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
 
   @Override
   protected void onEnabled(boolean joining) throws ExoPlaybackException {
+    Log.d(TAG, "onEnabled");
+
     decoderCounters = new DecoderCounters();
     eventDispatcher.enabled(decoderCounters);
   }
 
   @Override
   protected void onPositionReset(long positionUs, boolean joining) throws ExoPlaybackException {
+    Log.d(TAG, "onPositionReset");
+
     inputStreamEnded = false;
     outputStreamEnded = false;
     clearRenderedFirstFrame();
@@ -585,18 +592,24 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
 
   @Override
   protected void onStarted() {
+    Log.d(TAG, "onStarted");
+
     droppedFrames = 0;
     droppedFrameAccumulationStartTimeMs = SystemClock.elapsedRealtime();
   }
 
   @Override
   protected void onStopped() {
+    Log.d(TAG, "onStopped");
+
     joiningDeadlineMs = C.TIME_UNSET;
     maybeNotifyDroppedFrames();
   }
 
   @Override
   protected void onDisabled() {
+    Log.d(TAG, "onDisabled");
+
     format = null;
     waitingForKeys = false;
     clearReportedVideoSize();
@@ -676,6 +689,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   }
 
   private void onInputFormatChanged(Format newFormat) throws ExoPlaybackException {
+    Log.d(TAG, "onInputFormatChanged:" + newFormat.toString());
     Format oldFormat = format;
     format = newFormat;
 

@@ -76,7 +76,8 @@ DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
 DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
              jlong timeUs,
              jboolean isDecodeOnly,
-             jboolean isEndOfStream) {
+             jboolean isEndOfStream,
+             jboolean isKeyFrame) {
     AVCodecContext* context = (AVCodecContext*)jContext;
     uint8_t *packetBuffer = (uint8_t *) env->GetDirectBufferAddress(encoded);
 
@@ -87,7 +88,11 @@ DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
 
     packet.pts = timeUs;
     if (isDecodeOnly) {
-        packet.flags &= AV_PKT_FLAG_DISCARD;
+        packet.flags |= AV_PKT_FLAG_DISCARD;
+    }
+
+    if (isKeyFrame) {
+        packet.flags |= AV_PKT_FLAG_KEY;
     }
 
     int result = decodePacket(context, &packet);
@@ -114,7 +119,8 @@ DECODER_FUNC(jint , ffmpegSecureDecode,
              jintArray numBytesOfEncryptedData,
              jlong timeUs,
              jboolean isDecodeOnly,
-             jboolean isEndOfStream) {
+             jboolean isEndOfStream,
+             jboolean isKeyFrame) {
     return UNSUPPORTED_ERROR;
 }
 
@@ -240,28 +246,55 @@ int decodePacket(AVCodecContext *context, AVPacket *packet) {
 }
 
 int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
-    jboolean initResult = env->CallBooleanMethod(
-            jOutputBuffer, initForRgbFrame, frame->width, frame->height);
-    if (initResult == JNI_FALSE) {
-        return OUTPUT_BUFFER_ALLOCATE_FAILED;
+    const int kOutputModeYuv = 0;
+    const int kOutputModeRgb = 1;
+
+    int outputMode = env->GetIntField(jOutputBuffer, outputModeField);
+    if (outputMode == kOutputModeRgb) {
+        jboolean initResult = env->CallBooleanMethod(
+                jOutputBuffer, initForRgbFrame, frame->width, frame->height);
+        if (env->ExceptionCheck() || initResult == JNI_FALSE) {
+            return OUTPUT_BUFFER_ALLOCATE_FAILED;
+        }
+
+        // get pointer to the data buffer.
+        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+        jbyte* const data =
+                reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
+
+        int width = frame->width;
+        int height = frame->height;
+
+        env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
+
+        libyuv::I420ToRGB565((const uint8 *) frame->data[0],
+                           frame->linesize[0],
+                           (const uint8 *) frame->data[1],
+                           frame->linesize[1],
+                           (const uint8 *) frame->data[2],
+                           frame->linesize[2],
+                           (uint8 *) data, 2 * width, width, height);
+    } else {
+        // resize buffer if required.
+        jboolean initResult = env->CallBooleanMethod(
+                jOutputBuffer, initForYuvFrame, frame->width, frame->height,
+                frame->linesize[0], frame->linesize[1], 1);
+        if (env->ExceptionCheck() || !initResult) {
+            return OUTPUT_BUFFER_ALLOCATE_FAILED;
+        }
+
+        // get pointer to the data buffer.
+        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+        jbyte* const data = reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
+
+        const int32_t uvHeight = (frame->height + 1) / 2;
+        const uint64_t yLength = frame->linesize[0] * frame->height;
+        const uint64_t uvLength = frame->linesize[1] * uvHeight;
+
+        memcpy(data, frame->data[0], yLength);
+        memcpy(data + yLength, frame->data[1], uvLength);
+        memcpy(data + yLength + uvLength, frame->data[2], uvLength);
     }
 
-    // get pointer to the data buffer.
-    const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-    jbyte* const data =
-            reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
-
-    int width = frame->width;
-    int height = frame->height;
-
-    env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
-
-    libyuv::I420ToRGB565((const uint8 *) frame->data[0],
-                         frame->linesize[0],
-                         (const uint8 *) frame->data[1],
-                         frame->linesize[1],
-                         (const uint8 *) frame->data[2],
-                         frame->linesize[2],
-                         (uint8 *) data, 2 * width, width, height);
     return NO_ERROR;
 }
