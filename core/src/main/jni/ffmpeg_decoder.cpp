@@ -138,7 +138,7 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     } else if (error == AVERROR(EAGAIN)){
         // packet还不够
         result = DECODE_AGAIN;
-    } else if (error == AVERROR_EOF) {
+    } else if (error == AVERROR_EOF || error == AVERROR_INVALIDDATA) {
         result = DECODE_EOF;
     } else {
         result = DECODE_ERROR;
