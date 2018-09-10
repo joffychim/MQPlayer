@@ -710,7 +710,10 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       }
     }
 
-    if (pendingDrmSession != drmSession) {
+    boolean initializationDataChanged = !Util.areEqual(format.initializationData, oldFormat == null ? null
+            : oldFormat.initializationData);
+
+    if (initializationDataChanged || pendingDrmSession != drmSession) {
       if (decoderReceivedBuffers) {
         // Signal end of stream and wait for any final output buffers before re-initialization.
         decoderReinitializationState = REINITIALIZATION_STATE_SIGNAL_END_OF_STREAM;
