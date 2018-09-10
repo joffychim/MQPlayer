@@ -133,6 +133,9 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     }
 
     int error = avcodec_receive_frame(context, holdFrame);
+    // 测试只有三帧的视频，send null packet后，解最后一帧出现AVERROR_INVALIDDATA错误
+    // 所以把AVERROR_INVALIDDATA当做EOF处理
+    // TODO 把AVERROR_INVALIDDATA当做EOF处理是否得当？
     if (error == 0) {
         result = putFrameToOutputBuffer(env, holdFrame, jOutputBuffer);
     } else if (error == AVERROR(EAGAIN)){
@@ -249,6 +252,8 @@ int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
     const int kOutputModeYuv = 0;
     const int kOutputModeRgb = 1;
 
+    env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
+
     int outputMode = env->GetIntField(jOutputBuffer, outputModeField);
     if (outputMode == kOutputModeRgb) {
         jboolean initResult = env->CallBooleanMethod(
@@ -265,8 +270,6 @@ int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
         int width = frame->width;
         int height = frame->height;
 
-        env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
-
         libyuv::I420ToRGB565((const uint8 *) frame->data[0],
                            frame->linesize[0],
                            (const uint8 *) frame->data[1],
@@ -274,7 +277,7 @@ int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
                            (const uint8 *) frame->data[2],
                            frame->linesize[2],
                            (uint8 *) data, 2 * width, width, height);
-    } else {
+    } else if (outputMode == kOutputModeYuv) {
         // resize buffer if required.
         jboolean initResult = env->CallBooleanMethod(
                 jOutputBuffer, initForYuvFrame, frame->width, frame->height,
@@ -294,6 +297,8 @@ int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
         memcpy(data, frame->data[0], yLength);
         memcpy(data + yLength, frame->data[1], uvLength);
         memcpy(data + yLength + uvLength, frame->data[2], uvLength);
+    } else {
+
     }
 
     return NO_ERROR;

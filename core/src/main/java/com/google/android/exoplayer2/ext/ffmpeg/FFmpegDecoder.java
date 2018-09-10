@@ -44,7 +44,7 @@ import java.util.List;
     private final ExoMediaCrypto exoMediaCrypto;
     private final long ffmpegDecContext;
 
-    private volatile int outputMode;
+    private volatile int outputMode = OUTPUT_MODE_NONE;
 
     /**
      * Creates a ffmpeg decoder.

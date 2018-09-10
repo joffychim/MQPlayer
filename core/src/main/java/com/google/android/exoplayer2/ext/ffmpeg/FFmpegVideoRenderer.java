@@ -297,10 +297,13 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     }
 
     if (outputMode == FFmpegDecoder.OUTPUT_MODE_NONE) {
+      Log.e("zzh", "position:" + outputBuffer.timeUs + ", mode:" + outputBuffer.mode);
       // Skip frames in sync with playback, so we'll be at the right frame if the mode changes.
       if (isBufferLate(outputBuffer.timeUs - positionUs)) {
         forceRenderFrame = false;
         skipBuffer();
+        Log.e("zzh", "skip:" + outputBuffer.timeUs);
+
         buffersInCodecCount--;
         return true;
       }

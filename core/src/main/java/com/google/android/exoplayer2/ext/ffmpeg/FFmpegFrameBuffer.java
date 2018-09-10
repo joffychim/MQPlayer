@@ -17,7 +17,10 @@ package com.google.android.exoplayer2.ext.ffmpeg;
 
 import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.video.ColorInfo;
+
 import java.nio.ByteBuffer;
+
+import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegDecoder.OUTPUT_MODE_NONE;
 
 /**
  * Output buffer containing video frame data, populated by {@link FFmpegDecoder}.
@@ -31,7 +34,7 @@ import java.nio.ByteBuffer;
 
   private final FFmpegDecoder owner;
 
-  public int mode;
+  public int mode = OUTPUT_MODE_NONE;
   /**
    * RGB buffer for RGB mode.
    */
