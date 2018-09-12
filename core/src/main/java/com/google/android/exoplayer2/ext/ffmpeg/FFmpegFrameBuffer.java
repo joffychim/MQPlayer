@@ -16,11 +16,8 @@
 package com.google.android.exoplayer2.ext.ffmpeg;
 
 import com.google.android.exoplayer2.decoder.OutputBuffer;
-import com.google.android.exoplayer2.video.ColorInfo;
 
 import java.nio.ByteBuffer;
-
-import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegDecoder.OUTPUT_MODE_NONE;
 
 /**
  * Output buffer containing video frame data, populated by {@link FFmpegDecoder}.
@@ -34,14 +31,9 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegDecoder.OUTPUT_MODE
 
   private final FFmpegDecoder owner;
 
-  public int mode = OUTPUT_MODE_NONE;
-  /**
-   * RGB buffer for RGB mode.
-   */
   public ByteBuffer data;
   public int width;
   public int height;
-  public ColorInfo colorInfo;
 
   /**
    * YUV planes for YUV mode.
@@ -57,32 +49,6 @@ import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegDecoder.OUTPUT_MODE
   @Override
   public void release() {
     owner.releaseOutputBuffer(this);
-  }
-
-  /**
-   * Initializes the buffer.
-   *
-   * @param mode The output mode. One of {@link FFmpegDecoder#OUTPUT_MODE_NONE},
-   *     {@link FFmpegDecoder#OUTPUT_MODE_RGB} and {@link FFmpegDecoder#OUTPUT_MODE_YUV}.
-   */
-  public void init(int mode) {
-    this.mode = mode;
-  }
-
-  /**
-   * Resizes the buffer based on the given dimensions. Called via JNI after decoding completes.
-   * @return Whether the buffer was resized successfully.
-   */
-  public boolean initForRgbFrame(int width, int height) {
-    this.width = width;
-    this.height = height;
-    this.yuvPlanes = null;
-    if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, 2)) {
-      return false;
-    }
-    int minimumRgbSize = width * height * 2;
-    initData(minimumRgbSize);
-    return true;
   }
 
   /**

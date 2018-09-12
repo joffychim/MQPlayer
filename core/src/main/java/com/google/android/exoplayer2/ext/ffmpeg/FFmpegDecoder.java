@@ -29,11 +29,6 @@ import java.util.List;
  * ffmpeg decoder.
  */
 /* package */ final class FFmpegDecoder extends FFmpegBaseDecoder {
-
-    static final int OUTPUT_MODE_NONE = -1;
-    static final int OUTPUT_MODE_YUV = 0;
-    static final int OUTPUT_MODE_RGB = 1;
-
     private static final int NO_ERROR = 0;
     private static final int DECODE_ERROR = 1;
     private static final int DRM_ERROR = 2;
@@ -43,8 +38,6 @@ import java.util.List;
 
     private final ExoMediaCrypto exoMediaCrypto;
     private final long ffmpegDecContext;
-
-    private volatile int outputMode = OUTPUT_MODE_NONE;
 
     /**
      * Creates a ffmpeg decoder.
@@ -93,16 +86,6 @@ import java.util.List;
     @Override
     public String getName() {
         return "libffmpeg" + FFmpegLibrary.getVersion();
-    }
-
-    /**
-     * Sets the output mode for frames rendered by the decoder.
-     *
-     * @param outputMode The output mode. One of {@link #OUTPUT_MODE_NONE}, {@link #OUTPUT_MODE_RGB}
-     *                   and {@link #OUTPUT_MODE_YUV}.
-     */
-    public void setOutputMode(int outputMode) {
-        this.outputMode = outputMode;
     }
 
     @Override
@@ -166,7 +149,6 @@ import java.util.List;
 
     @Override
     protected FFmpegDecoderException getFrame(FFmpegFrameBuffer outputBuffer) {
-        outputBuffer.init(outputMode);
         int getFrameResult = ffmpegGetFrame(ffmpegDecContext, outputBuffer);
         if (getFrameResult == DECODE_AGAIN) {
             outputBuffer.addFlag(Constant.BUFFER_FLAG_DECODE_AGAIN);

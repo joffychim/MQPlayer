@@ -28,7 +28,7 @@ import javax.microedition.khronos.opengles.GL10;
  * GLSurfaceView.Renderer implementation that can render YUV Frames returned by libffmpeg after
  * decoding. It does the YUV to RGB color conversion in the Fragment Shader.
  */
-/* package */ class FFmpegFrameRender implements GLSurfaceView.Renderer {
+/* package */ class FFmpegFrameRender {
 
   private static final float[] kColorConversion601 = {
     1.164f, 1.164f, 1.164f,

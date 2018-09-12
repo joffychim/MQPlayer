@@ -23,7 +23,6 @@ extern "C" {
 static jmethodID initForRgbFrame;
 static jmethodID initForYuvFrame;
 static jfieldID dataField;
-static jfieldID outputModeField;
 static jfieldID timeFrameUsField;
 
 static int lastFFmpegErrorCode = 0;
@@ -218,8 +217,6 @@ void initJavaRef(JNIEnv *env) {
                                        "(II)Z");
     dataField = env->GetFieldID(outputBufferClass, "data",
                                 "Ljava/nio/ByteBuffer;");
-    outputModeField = env->GetFieldID(outputBufferClass, "mode", "I");
-
     timeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
 }
 
@@ -254,52 +251,25 @@ int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
 
     env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
 
-    int outputMode = env->GetIntField(jOutputBuffer, outputModeField);
-    if (outputMode == kOutputModeRgb) {
-        jboolean initResult = env->CallBooleanMethod(
-                jOutputBuffer, initForRgbFrame, frame->width, frame->height);
-        if (env->ExceptionCheck() || initResult == JNI_FALSE) {
-            return OUTPUT_BUFFER_ALLOCATE_FAILED;
-        }
-
-        // get pointer to the data buffer.
-        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-        jbyte* const data =
-                reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
-
-        int width = frame->width;
-        int height = frame->height;
-
-        libyuv::I420ToRGB565((const uint8 *) frame->data[0],
-                           frame->linesize[0],
-                           (const uint8 *) frame->data[1],
-                           frame->linesize[1],
-                           (const uint8 *) frame->data[2],
-                           frame->linesize[2],
-                           (uint8 *) data, 2 * width, width, height);
-    } else if (outputMode == kOutputModeYuv) {
-        // resize buffer if required.
-        jboolean initResult = env->CallBooleanMethod(
-                jOutputBuffer, initForYuvFrame, frame->width, frame->height,
-                frame->linesize[0], frame->linesize[1], 1);
-        if (env->ExceptionCheck() || !initResult) {
-            return OUTPUT_BUFFER_ALLOCATE_FAILED;
-        }
-
-        // get pointer to the data buffer.
-        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-        jbyte* const data = reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
-
-        const int32_t uvHeight = (frame->height + 1) / 2;
-        const uint64_t yLength = frame->linesize[0] * frame->height;
-        const uint64_t uvLength = frame->linesize[1] * uvHeight;
-
-        memcpy(data, frame->data[0], yLength);
-        memcpy(data + yLength, frame->data[1], uvLength);
-        memcpy(data + yLength + uvLength, frame->data[2], uvLength);
-    } else {
-
+    // resize buffer if required.
+    jboolean initResult = env->CallBooleanMethod(
+            jOutputBuffer, initForYuvFrame, frame->width, frame->height,
+            frame->linesize[0], frame->linesize[1], 1);
+    if (env->ExceptionCheck() || !initResult) {
+        return OUTPUT_BUFFER_ALLOCATE_FAILED;
     }
+
+    // get pointer to the data buffer.
+    const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+    jbyte* const data = reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
+
+    const int32_t uvHeight = (frame->height + 1) / 2;
+    const uint64_t yLength = frame->linesize[0] * frame->height;
+    const uint64_t uvLength = frame->linesize[1] * uvHeight;
+
+    memcpy(data, frame->data[0], yLength);
+    memcpy(data + yLength, frame->data[1], uvLength);
+    memcpy(data + yLength + uvLength, frame->data[2], uvLength);
 
     return NO_ERROR;
 }
