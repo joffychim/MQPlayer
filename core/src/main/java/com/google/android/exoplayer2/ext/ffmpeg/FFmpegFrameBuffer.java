@@ -20,12 +20,21 @@ import com.google.android.exoplayer2.video.ColorInfo;
 
 import java.nio.ByteBuffer;
 
+import static com.google.android.exoplayer2.ext.ffmpeg.FFmpegDecoder.OUTPUT_MODE_NONE;
+
 /**
  * Output buffer containing video frame data, populated by {@link FFmpegDecoder}.
  */
 /* package */ final class FFmpegFrameBuffer extends OutputBuffer {
+
+  public static final int COLORSPACE_UNKNOWN = 0;
+  public static final int COLORSPACE_BT601 = 1;
+  public static final int COLORSPACE_BT709 = 2;
+  public static final int COLORSPACE_BT2020 = 3;
+
   private final FFmpegDecoder owner;
 
+  public int mode = OUTPUT_MODE_NONE;
   /**
    * RGB buffer for RGB mode.
    */
@@ -33,6 +42,13 @@ import java.nio.ByteBuffer;
   public int width;
   public int height;
   public ColorInfo colorInfo;
+
+  /**
+   * YUV planes for YUV mode.
+   */
+  public ByteBuffer[] yuvPlanes;
+  public int[] yuvStrides;
+  public int colorspace;
 
   public FFmpegFrameBuffer(FFmpegDecoder owner) {
     this.owner = owner;
@@ -44,17 +60,70 @@ import java.nio.ByteBuffer;
   }
 
   /**
+   * Initializes the buffer.
+   *
+   * @param mode The output mode. One of {@link FFmpegDecoder#OUTPUT_MODE_NONE},
+   *     {@link FFmpegDecoder#OUTPUT_MODE_RGB} and {@link FFmpegDecoder#OUTPUT_MODE_YUV}.
+   */
+  public void init(int mode) {
+    this.mode = mode;
+  }
+
+  /**
    * Resizes the buffer based on the given dimensions. Called via JNI after decoding completes.
    * @return Whether the buffer was resized successfully.
    */
   public boolean initForRgbFrame(int width, int height) {
     this.width = width;
     this.height = height;
+    this.yuvPlanes = null;
     if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, 2)) {
       return false;
     }
     int minimumRgbSize = width * height * 2;
     initData(minimumRgbSize);
+    return true;
+  }
+
+  /**
+   * Resizes the buffer based on the given stride. Called via JNI after decoding completes.
+   * @return Whether the buffer was resized successfully.
+   */
+  public boolean initForYuvFrame(int width, int height, int yStride, int uvStride,
+      int colorspace) {
+    this.width = width;
+    this.height = height;
+    this.colorspace = colorspace;
+    int uvHeight = (int) (((long) height + 1) / 2);
+    if (!isSafeToMultiply(yStride, height) || !isSafeToMultiply(uvStride, uvHeight)) {
+      return false;
+    }
+    int yLength = yStride * height;
+    int uvLength = uvStride * uvHeight;
+    int minimumYuvSize = yLength + (uvLength * 2);
+    if (!isSafeToMultiply(uvLength, 2) || minimumYuvSize < yLength) {
+      return false;
+    }
+    initData(minimumYuvSize);
+
+    if (yuvPlanes == null) {
+      yuvPlanes = new ByteBuffer[3];
+    }
+    // Rewrapping has to be done on every frame since the stride might have changed.
+    yuvPlanes[0] = data.slice();
+    yuvPlanes[0].limit(yLength);
+    data.position(yLength);
+    yuvPlanes[1] = data.slice();
+    yuvPlanes[1].limit(uvLength);
+    data.position(yLength + uvLength);
+    yuvPlanes[2] = data.slice();
+    yuvPlanes[2].limit(uvLength);
+    if (yuvStrides == null) {
+      yuvStrides = new int[3];
+    }
+    yuvStrides[0] = yStride;
+    yuvStrides[1] = uvStride;
+    yuvStrides[2] = uvStride;
     return true;
   }
 

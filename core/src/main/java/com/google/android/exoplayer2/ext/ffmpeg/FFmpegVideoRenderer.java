@@ -76,6 +76,13 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private static final int REINITIALIZATION_STATE_WAIT_END_OF_STREAM = 2;
 
   /**
+   * The type of a message that can be passed to an instance of this class via
+   * {@link ExoPlayer#sendMessages} or {@link ExoPlayer#blockingSendMessages}. The message object
+   * should be the target {@link IFFmpegFrameRenderer}, or null.
+   */
+  public static final int MSG_SET_OUTPUT_BUFFER_RENDERER = C.MSG_CUSTOM_BASE;
+
+  /**
    * The number of input buffers.
    */
   private static final int NUM_INPUT_BUFFERS = 8;
@@ -116,6 +123,8 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private boolean forceRenderFrame;
   private long joiningDeadlineMs;
   private Surface surface;
+  private IFFmpegFrameRenderer outputBufferRenderer;
+  private int outputMode;
   private boolean waitingForKeys;
 
   private boolean inputStreamEnded;
@@ -186,6 +195,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     formatHolder = new FormatHolder();
     flagsOnlyBuffer = DecoderInputBuffer.newFlagsOnlyInstance();
     eventDispatcher = new EventDispatcher(eventHandler, eventListener);
+    outputMode = FFmpegDecoder.OUTPUT_MODE_NONE;
     decoderReinitializationState = REINITIALIZATION_STATE_NONE;
   }
 
@@ -286,7 +296,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       return false;
     }
 
-    if (surface == null) {
+    if (outputMode == FFmpegDecoder.OUTPUT_MODE_NONE) {
       // Skip frames in sync with playback, so we'll be at the right frame if the mode changes.
       if (isBufferLate(outputBuffer.timeUs - positionUs)) {
         forceRenderFrame = false;
@@ -363,17 +373,24 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       return;
     }
 
-    boolean renderRgb = surface != null;
-    if (renderRgb) {
-        maybeNotifyVideoSizeChanged(outputBuffer.width, outputBuffer.height);
+    int bufferMode = outputBuffer.mode;
+    boolean renderRgb = bufferMode == FFmpegDecoder.OUTPUT_MODE_RGB && surface != null;
+    boolean renderYuv = bufferMode == FFmpegDecoder.OUTPUT_MODE_YUV && outputBufferRenderer != null;
+    if (!renderRgb && !renderYuv) {
+      dropBuffer();
+    } else {
+      maybeNotifyVideoSizeChanged(outputBuffer.width, outputBuffer.height);
+      if (renderRgb) {
         renderRgbFrame(outputBuffer, scaleToFit);
         outputBuffer.release();
-        outputBuffer = null;
-        consecutiveDroppedFrameCount = 0;
-        decoderCounters.renderedOutputBufferCount++;
-        maybeNotifyRenderedFirstFrame();
-    } else {
-        dropBuffer();
+      } else /* renderYuv */ {
+        outputBufferRenderer.setOutputBuffer(outputBuffer);
+        // The renderer will release the buffer.
+      }
+      outputBuffer = null;
+      consecutiveDroppedFrameCount = 0;
+      decoderCounters.renderedOutputBufferCount++;
+      maybeNotifyRenderedFirstFrame();
     }
   }
 
@@ -530,7 +547,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       return false;
     }
     if (format != null && (isSourceReady() || outputBuffer != null)
-        && (renderedFirstFrame || surface == null)) {
+        && (renderedFirstFrame || outputMode == FFmpegDecoder.OUTPUT_MODE_NONE)) {
       // Ready. If we were joining then we've now joined, so clear the joining deadline.
       joiningDeadlineMs = C.TIME_UNSET;
       return true;
@@ -643,6 +660,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       TraceUtil.beginSection("createFFmpegDecoder");
       decoder = new FFmpegDecoder(format, NUM_INPUT_BUFFERS, NUM_OUTPUT_BUFFERS, INITIAL_INPUT_BUFFER_SIZE,
           mediaCrypto);
+      decoder.setOutputMode(outputMode);
       TraceUtil.endSection();
       long codecInitializedTimestamp = SystemClock.elapsedRealtime();
       eventDispatcher.decoderInitialized(decoder.getName(), codecInitializedTimestamp,
@@ -712,18 +730,27 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   @Override
   public void handleMessage(int messageType, Object message) throws ExoPlaybackException {
     if (messageType == C.MSG_SET_SURFACE) {
-      setOutput((Surface) message);
+      setOutput((Surface) message, null);
+    } else if (messageType == MSG_SET_OUTPUT_BUFFER_RENDERER) {
+      setOutput(null, (IFFmpegFrameRenderer) message);
     } else {
       super.handleMessage(messageType, message);
     }
   }
 
-  private void setOutput(Surface surface) {
+  private void setOutput(Surface surface, IFFmpegFrameRenderer outputBufferRenderer) {
     // At most one output may be non-null. Both may be null if the output is being cleared.
-    if (this.surface != surface) {
+    Assertions.checkState(surface == null || outputBufferRenderer == null);
+    if (this.surface != surface || this.outputBufferRenderer != outputBufferRenderer) {
       // The output has changed.
       this.surface = surface;
-      if (surface != null) {
+      this.outputBufferRenderer = outputBufferRenderer;
+      outputMode = outputBufferRenderer != null ? FFmpegDecoder.OUTPUT_MODE_YUV
+          : surface != null ? FFmpegDecoder.OUTPUT_MODE_RGB : FFmpegDecoder.OUTPUT_MODE_NONE;
+      if (outputMode != FFmpegDecoder.OUTPUT_MODE_NONE) {
+        if (decoder != null) {
+          decoder.setOutputMode(outputMode);
+        }
         // If we know the video size, report it again immediately.
         maybeRenotifyVideoSizeChanged();
         // We haven't rendered to the new output yet.
@@ -737,7 +764,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
         clearReportedVideoSize();
         clearRenderedFirstFrame();
       }
-    } else {
+    } else if (outputMode != FFmpegDecoder.OUTPUT_MODE_NONE) {
       // The output is unchanged and non-null. If we know the video size and/or have already
       // rendered to the output, report these again immediately.
       maybeRenotifyVideoSizeChanged();
