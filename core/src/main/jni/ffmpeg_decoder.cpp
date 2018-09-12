@@ -240,7 +240,7 @@ int decodePacket(AVCodecContext *context, AVPacket *packet) {
     int ffError = avcodec_send_packet(context, packet);
     if (ffError == AVERROR(EAGAIN)) {
         result = DECODE_AGAIN;
-    } else if (ffError != 0) {
+    } else if (ffError != 0 && ffError != AVERROR_INVALIDDATA) {
         result = DECODE_ERROR;
     }
 
