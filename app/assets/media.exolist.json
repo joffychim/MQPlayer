@@ -287,6 +287,10 @@
       {
         "name": "Super speed (PlayReady)",
         "uri": "asset://xxx/1.mp4"
+      },
+      {
+        "name": "6帧",
+        "uri": "asset://xxx/video.mp4"
       }
     ]
   },

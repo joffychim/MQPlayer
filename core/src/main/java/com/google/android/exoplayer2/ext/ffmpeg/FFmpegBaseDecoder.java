@@ -16,6 +16,7 @@
 package com.google.android.exoplayer2.ext.ffmpeg;
 
 import com.google.android.exoplayer2.decoder.Decoder;
+import com.google.android.exoplayer2.ext.Constant;
 import com.google.android.exoplayer2.util.Assertions;
 
 import java.util.LinkedList;

@@ -16,20 +16,19 @@
 package com.google.android.exoplayer2.ext.ffmpeg;
 
 import android.opengl.GLES20;
-import android.opengl.GLSurfaceView;
+
+import com.moqan.mqplayer.egl.GLViewRenderer;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 
 /**
  * GLSurfaceView.Renderer implementation that can render YUV Frames returned by libffmpeg after
  * decoding. It does the YUV to RGB color conversion in the Fragment Shader.
  */
-/* package */ class FFmpegFrameRender {
-
+class FFmpegFrameRender implements GLViewRenderer, IFFmpegFrameRenderer {
   private static final float[] kColorConversion601 = {
     1.164f, 1.164f, 1.164f,
     0.0f, -0.392f, 2.017f,
@@ -98,22 +97,8 @@ import javax.microedition.khronos.opengles.GL10;
     pendingOutputBufferReference = new AtomicReference<>();
   }
 
-  /**
-   * Set a frame to be rendered. This should be followed by a call to
-   * FFmpegVideoSurfaceView.requestRender() to actually render the frame.
-   *
-   * @param outputBuffer OutputBuffer containing the YUV Frame to be rendered
-   */
-  public void setFrame(FFmpegFrameBuffer outputBuffer) {
-    FFmpegFrameBuffer oldPendingOutputBuffer = pendingOutputBufferReference.getAndSet(outputBuffer);
-    if (oldPendingOutputBuffer != null) {
-      // The old pending output buffer will never be used for rendering, so release it now.
-      oldPendingOutputBuffer.release();
-    }
-  }
-
   @Override
-  public void onSurfaceCreated(GL10 unused, EGLConfig config) {
+  public void onSurfaceCreated() {
     // Create the GL program.
     program = GLES20.glCreateProgram();
 
@@ -144,12 +129,12 @@ import javax.microedition.khronos.opengles.GL10;
   }
 
   @Override
-  public void onSurfaceChanged(GL10 unused, int width, int height) {
-    GLES20.glViewport(0, 0, width, height);
+  public void onSurfaceChanged(int width, int height) {
+     GLES20.glViewport(0, 0, width, height);
   }
 
   @Override
-  public void onDrawFrame(GL10 unused) {
+  public void onDrawFrame() {
     FFmpegFrameBuffer pendingOutputBuffer = pendingOutputBufferReference.getAndSet(null);
     if (pendingOutputBuffer == null && renderedOutputBuffer == null) {
       // There is no output buffer to render at the moment.
@@ -161,6 +146,7 @@ import javax.microedition.khronos.opengles.GL10;
       }
       renderedOutputBuffer = pendingOutputBuffer;
     }
+
     FFmpegFrameBuffer outputBuffer = renderedOutputBuffer;
     // Set color matrix. Assume BT709 if the color space is unknown.
     float[] colorConversion = kColorConversion709;
@@ -261,4 +247,17 @@ import javax.microedition.khronos.opengles.GL10;
     return buffer;
   }
 
+  /**
+   * Set a frame to be rendered. This should be followed by a call to
+   * FFmpegVideoSurfaceView.requestRender() to actually render the frame.
+   *
+   * @param outputBuffer OutputBuffer containing the YUV Frame to be rendered
+   */
+  public void setOutputBuffer(FFmpegFrameBuffer outputBuffer) {
+    FFmpegFrameBuffer oldPendingOutputBuffer = pendingOutputBufferReference.getAndSet(outputBuffer);
+    if (oldPendingOutputBuffer != null) {
+      // The old pending output buffer will never be used for rendering, so release it now.
+      oldPendingOutputBuffer.release();
+    }
+  }
 }

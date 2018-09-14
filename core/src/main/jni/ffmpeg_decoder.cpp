@@ -213,8 +213,6 @@ void initJavaRef(JNIEnv *env) {
             "com/google/android/exoplayer2/ext/ffmpeg/FFmpegFrameBuffer");
     initForYuvFrame = env->GetMethodID(outputBufferClass, "initForYuvFrame",
                                        "(IIIII)Z");
-    initForRgbFrame = env->GetMethodID(outputBufferClass, "initForRgbFrame",
-                                       "(II)Z");
     dataField = env->GetFieldID(outputBufferClass, "data",
                                 "Ljava/nio/ByteBuffer;");
     timeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");

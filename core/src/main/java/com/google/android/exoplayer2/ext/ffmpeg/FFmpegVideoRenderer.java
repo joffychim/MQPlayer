@@ -17,6 +17,7 @@ package com.google.android.exoplayer2.ext.ffmpeg;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Point;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -36,14 +37,14 @@ import com.google.android.exoplayer2.drm.DrmSession.DrmSessionException;
 import com.google.android.exoplayer2.drm.DrmSessionManager;
 import com.google.android.exoplayer2.drm.ExoMediaCrypto;
 import com.google.android.exoplayer2.drm.FrameworkMediaCrypto;
+import com.google.android.exoplayer2.ext.Constant;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.TraceUtil;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.video.VideoRendererEventListener;
 import com.google.android.exoplayer2.video.VideoRendererEventListener.EventDispatcher;
-import com.moqan.mqplayer.egl.EglCore;
-import com.moqan.mqplayer.egl.WindowSurface;
+import com.moqan.mqplayer.egl.GLThread;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -117,9 +118,10 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   private boolean forceRenderFrame;
   private long joiningDeadlineMs;
   private Surface surface;
-  private IFFmpegFrameRenderer outputBufferRenderer;
-  private WindowSurface windowSurface;
-  private EglCore eglCore;
+  private int surfaceWidth = -1;
+  private int surfaceHeight = -1;
+  private FFmpegFrameRender outputBufferRenderer;
+  private GLThread glThread;
   private boolean waitingForKeys;
 
   private boolean inputStreamEnded;
@@ -185,6 +187,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     this.maxDroppedFramesToNotify = maxDroppedFramesToNotify;
     this.drmSessionManager = drmSessionManager;
     this.playClearSamplesWithoutKeys = playClearSamplesWithoutKeys;
+    this.outputBufferRenderer = new FFmpegFrameRender();
     joiningDeadlineMs = C.TIME_UNSET;
     clearReportedVideoSize();
     formatHolder = new FormatHolder();
@@ -371,6 +374,9 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       maybeNotifyVideoSizeChanged(outputBuffer.width, outputBuffer.height);
       // The renderer will release the buffer.
       outputBufferRenderer.setOutputBuffer(outputBuffer);
+      if (glThread != null) {
+        glThread.requestRender();
+      }
       outputBuffer = null;
       consecutiveDroppedFrameCount = 0;
       decoderCounters.renderedOutputBufferCount++;
@@ -580,11 +586,12 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   protected void onStarted() {
     Log.d(TAG, "onStarted");
 
-    eglCore = new EglCore();
-    attachSurfaceToCurrentEglCore();
-
     droppedFrames = 0;
     droppedFrameAccumulationStartTimeMs = SystemClock.elapsedRealtime();
+
+    if (glThread != null) {
+      glThread.onResume();
+    }
   }
 
   @Override
@@ -593,14 +600,19 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
 
     joiningDeadlineMs = C.TIME_UNSET;
     maybeNotifyDroppedFrames();
-    if (windowSurface != null) {
-      windowSurface.release();
-      windowSurface = null;
+
+    if (glThread != null) {
+      glThread.onPause();
     }
-    if (eglCore != null) {
-      eglCore.release();
-      eglCore = null;
+  }
+
+  @Override
+  protected void finalize() throws Throwable {
+    if (glThread != null) {
+      glThread.requestExitAndWait();
+      glThread = null;
     }
+    super.finalize();
   }
 
   @Override
@@ -726,27 +738,22 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   @Override
   public void handleMessage(int messageType, Object message) throws ExoPlaybackException {
     if (messageType == C.MSG_SET_SURFACE) {
-      setOutput((Surface) message, null);
+      setOutput((Surface) message);
+    } else if (messageType == Constant.MSG_SURFACE_SIZE_CHANGED) {
+      Point size = (Point) message;
+      onSurfaceSizeChanged(size.x, size.y);
     } else {
       super.handleMessage(messageType, message);
     }
   }
 
-  private void attachSurfaceToCurrentEglCore() {
-    if (windowSurface != null) {
-      windowSurface.release();
-      windowSurface.createWindowSurface(surface);
-    } else {
-      windowSurface = new WindowSurface(eglCore, surface, false);
-    }
-    windowSurface.makeCurrent();
-  }
-
-  private void setOutput(Surface surface, IFFmpegFrameRenderer outputBufferRenderer) {
+  private void setOutput(Surface surface) {
     if (this.surface != surface) {
       // The output has changed.
+      Surface oldSurface = this.surface;
       this.surface = surface;
-      this.outputBufferRenderer = outputBufferRenderer;
+      onSurfaceChanged(surface, oldSurface);
+
       if (surface != null) {
         // If we know the video size, report it again immediately.
         maybeRenotifyVideoSizeChanged();
@@ -754,7 +761,6 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
         clearRenderedFirstFrame();
         if (getState() == STATE_STARTED) {
           setJoiningDeadlineMs();
-          attachSurfaceToCurrentEglCore();
         }
       } else {
         // The output has been removed. We leave the outputMode of the underlying decoder unchanged
@@ -768,6 +774,26 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
       maybeRenotifyVideoSizeChanged();
       maybeRenotifyRenderedFirstFrame();
     }
+  }
+
+  private void onSurfaceChanged(Surface newSurface, Surface oldSurface) {
+    if (glThread == null) {
+      GLThread.Builder builder = new GLThread.Builder();
+      builder.setSurface(newSurface).setRenderer(outputBufferRenderer);
+      glThread = builder.createGLThread();
+      glThread.start();
+    } else {
+      glThread.setSurface(newSurface);
+    }
+    glThread.surfaceCreated();
+  }
+
+  private void onSurfaceSizeChanged(int width, int height) {
+    if (glThread != null) {
+      glThread.onWindowResize(width, height);
+    }
+    surfaceWidth = width;
+    surfaceHeight = height;
   }
 
   private void setJoiningDeadlineMs() {
