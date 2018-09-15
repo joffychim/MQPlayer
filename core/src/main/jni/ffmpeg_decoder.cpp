@@ -80,21 +80,27 @@ DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
     AVCodecContext* context = (AVCodecContext*)jContext;
     uint8_t *packetBuffer = (uint8_t *) env->GetDirectBufferAddress(encoded);
 
-    AVPacket packet;
-    av_init_packet(&packet);
-    packet.data = packetBuffer;
-    packet.size = len;
+    int result = NO_ERROR;
 
-    packet.pts = timeUs;
-    if (isDecodeOnly) {
-        packet.flags |= AV_PKT_FLAG_DISCARD;
+    if (len > 0) {
+        AVPacket packet;
+        av_init_packet(&packet);
+        packet.data = packetBuffer;
+        packet.size = len;
+
+        packet.pts = timeUs;
+        packet.dts = timeUs;
+        if (isDecodeOnly) {
+            packet.flags |= AV_PKT_FLAG_DISCARD;
+        }
+
+        if (isKeyFrame) {
+            packet.flags |= AV_PKT_FLAG_KEY;
+        }
+
+        result = decodePacket(context, &packet);
     }
 
-    if (isKeyFrame) {
-        packet.flags |= AV_PKT_FLAG_KEY;
-    }
-
-    int result = decodePacket(context, &packet);
     if (result == NO_ERROR && isEndOfStream) {
         result = decodePacket(context, NULL);
         if (result == DECODE_AGAIN) {

@@ -112,7 +112,10 @@ import java.util.List;
         boolean isDecodeOnly = inputBuffer.isDecodeOnly();
 
         ByteBuffer inputData = inputBuffer.data;
-        int inputSize = inputData.limit();
+        int inputSize = 0;
+        if (!inputBuffer.isEndOfStream()) {
+            inputSize = inputData.limit();
+        }
         CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
         final long result = inputBuffer.isEncrypted()
                 ? ffmpegSecureDecode(ffmpegDecContext,
