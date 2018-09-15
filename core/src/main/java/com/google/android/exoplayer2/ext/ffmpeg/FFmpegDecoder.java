@@ -66,7 +66,7 @@ import java.util.List;
         if (mimeType.equals(MimeTypes.VIDEO_H264)) {
             codecName = "h264";
         } else if (mimeType.equals(MimeTypes.VIDEO_H265)) {
-            codecName = "h265";
+            codecName = "hevc";
         } else {
             throw new FFmpegDecoderException("Unsupported mimetype:" + mimeType);
         }
@@ -176,32 +176,40 @@ import java.util.List;
     }
 
     private static byte[] getExtraData(String mimeType, List<byte[]> initializationData) {
-        int extraDataLength = 0;
-        for (byte[] data : initializationData) {
-            // 加2个分割
-            if (extraDataLength != 0) {
-                extraDataLength += 2;
+        byte[] extraData = null;
+        if (initializationData.size() > 1) {
+            int extraDataLength = 0;
+            for (byte[] data : initializationData) {
+                // 加2个分割
+                if (extraDataLength != 0) {
+                    extraDataLength += 2;
+                }
+                extraDataLength += data.length + 2;
             }
-            extraDataLength += data.length + 2;
+
+            if (extraDataLength > 0) {
+                extraData = new byte[extraDataLength];
+                int currentPos = 0;
+                for (byte[] data : initializationData) {
+                    if (currentPos != 0) {
+                        extraData[currentPos] = 0;
+                        extraData[currentPos + 1] = 0;
+                        currentPos += 2;
+                    }
+                    extraData[currentPos] = (byte) (data.length >> 8);
+                    extraData[currentPos + 1] = (byte) (data.length & 0xFF);
+                    System.arraycopy(data, 0, extraData, currentPos + 2, data.length);
+                    currentPos += data.length + 2;
+                }
+            }
+        } else if (initializationData.size() == 1){
+            byte[] data = initializationData.get(0);
+            if (data != null && data.length > 0) {
+                extraData = new byte[data.length];
+                System.arraycopy(data, 0, extraData, 0, data.length);
+            }
         }
 
-        if (extraDataLength == 0) {
-            return null;
-        }
-
-        byte[] extraData = new byte[extraDataLength];
-        int currentPos = 0;
-        for (byte[] data : initializationData) {
-            if (currentPos != 0) {
-                extraData[currentPos] = 0;
-                extraData[currentPos + 1] = 0;
-                currentPos += 2;
-            }
-            extraData[currentPos] = (byte) (data.length >> 8);
-            extraData[currentPos + 1] = (byte) (data.length & 0xFF);
-            System.arraycopy(data, 0, extraData, currentPos + 2, data.length);
-            currentPos += data.length + 2;
-        }
         return extraData;
     }
 
