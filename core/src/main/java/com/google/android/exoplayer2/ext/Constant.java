@@ -10,4 +10,5 @@ public class Constant {
     public static final int BUFFER_FLAG_DECODE_AGAIN = 0x00800000;
 
     public static final int MSG_SURFACE_SIZE_CHANGED = MSG_CUSTOM_BASE + 100;
+    public static final int MSG_PLAY_RELEASED = MSG_CUSTOM_BASE + 101;
 }

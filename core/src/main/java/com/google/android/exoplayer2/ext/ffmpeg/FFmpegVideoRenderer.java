@@ -609,6 +609,7 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
   @Override
   protected void finalize() throws Throwable {
     if (glThread != null) {
+      glThread.surfaceDestroyed();
       glThread.requestExitAndWait();
       glThread = null;
     }
@@ -742,8 +743,18 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     } else if (messageType == Constant.MSG_SURFACE_SIZE_CHANGED) {
       Point size = (Point) message;
       onSurfaceSizeChanged(size.x, size.y);
+    } else if (messageType == Constant.MSG_PLAY_RELEASED) {
+      onPlayReleased();
     } else {
       super.handleMessage(messageType, message);
+    }
+  }
+
+  private void onPlayReleased() {
+    if (glThread != null) {
+      glThread.surfaceDestroyed();
+      glThread.requestExitAndWait();
+      glThread = null;
     }
   }
 
@@ -785,7 +796,12 @@ public final class FFmpegVideoRenderer extends BaseRenderer {
     } else {
       glThread.setSurface(newSurface);
     }
-    glThread.surfaceCreated();
+
+    if (newSurface != null) {
+      glThread.surfaceCreated();
+    } else {
+      glThread.surfaceDestroyed();
+    }
   }
 
   private void onSurfaceSizeChanged(int width, int height) {

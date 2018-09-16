@@ -4,14 +4,16 @@ import android.graphics.Point
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.TextureView
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.analytics.AnalyticsCollector
 import com.google.android.exoplayer2.drm.DrmSessionManager
 import com.google.android.exoplayer2.drm.FrameworkMediaCrypto
+import com.google.android.exoplayer2.ext.Constant.MSG_PLAY_RELEASED
 import com.google.android.exoplayer2.trackselection.TrackSelector
 import com.google.android.exoplayer2.util.Clock
-import java.util.ArrayList
+import java.util.*
 
 /**
  * @since 18/9/14
@@ -72,18 +74,21 @@ class MQExoPlayer @JvmOverloads constructor(
             clearListener()
             this.textureView = textureView
             that.setVideoTextureView(textureView)
+            if (textureView?.isAvailable == true) {
+                onSurfaceSizeChanged(textureView.width, textureView.height)
+            }
             textureView?.surfaceTextureListener = InnerSurfaceTextureListener(textureView?.surfaceTextureListener)
         }
 
-        override fun setVideoSurfaceHolder(surfaceHolder: SurfaceHolder?) {
+        override fun setVideoSurfaceView(surfaceView: SurfaceView?) {
             clearListener()
-            this.surfaceHolder = surfaceHolder
+            this.surfaceHolder = surfaceView?.holder
             that.setVideoSurfaceHolder(surfaceHolder)
             surfaceHolder?.addCallback(innerSurfaceCallback)
         }
 
         override fun setVideoSurface(surface: Surface?) {
-            throw IllegalAccessError("please call setVideoTextureView or setVideoSurfaceHolder")
+            throw IllegalAccessError("please call setVideoTextureView or setVideoSurfaceView")
         }
 
         fun clearListener() {
@@ -103,6 +108,7 @@ class MQExoPlayer @JvmOverloads constructor(
 
     override fun release() {
         innerVideoComponent.clearListener()
+        onPlayReleased()
         super.release()
     }
 
@@ -113,6 +119,21 @@ class MQExoPlayer @JvmOverloads constructor(
                 val size = Point(width, height);
                 messages.add(createMessage(renderer).setType(Constant.MSG_SURFACE_SIZE_CHANGED).setPayload(size).send())
             }
+        }
+
+        try {
+            for (message in messages) {
+                message.blockUntilDelivered()
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun onPlayReleased() {
+        val messages = ArrayList<PlayerMessage>()
+        for (renderer in renderers) {
+            messages.add(createMessage(renderer).setType(MSG_PLAY_RELEASED).send())
         }
 
         try {
