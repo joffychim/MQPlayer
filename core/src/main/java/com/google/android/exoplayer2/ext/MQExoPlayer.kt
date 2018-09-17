@@ -50,6 +50,7 @@ class MQExoPlayer @JvmOverloads constructor(
 
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture?, width: Int, height: Int) {
             origSurfaceTextureListener?.onSurfaceTextureAvailable(surface, width, height)
+            onSurfaceSizeChanged(width, height)
         }
     }
 
@@ -114,19 +115,17 @@ class MQExoPlayer @JvmOverloads constructor(
 
     private fun onSurfaceSizeChanged(width: Int, height: Int) {
         val messages = ArrayList<PlayerMessage>()
+        val size = Point(width, height);
+
         for (renderer in renderers) {
             if (renderer.trackType == C.TRACK_TYPE_VIDEO) {
-                val size = Point(width, height);
                 messages.add(createMessage(renderer).setType(Constant.MSG_SURFACE_SIZE_CHANGED).setPayload(size).send())
             }
         }
 
         try {
-            for (message in messages) {
-                message.blockUntilDelivered()
-            }
+            messages.forEach { it.blockUntilDelivered() }
         } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
         }
     }
 
@@ -137,11 +136,8 @@ class MQExoPlayer @JvmOverloads constructor(
         }
 
         try {
-            for (message in messages) {
-                message.blockUntilDelivered()
-            }
+            messages.forEach { it.blockUntilDelivered() }
         } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
         }
     }
 }
