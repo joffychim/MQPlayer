@@ -1,2 +1,2 @@
 # mqplayer
-mediaplayer with exoplayer and ffmpeg
+Android video player based on FFmpeg and Exoplayer
