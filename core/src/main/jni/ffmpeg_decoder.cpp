@@ -5,8 +5,11 @@
 #include "ffmpeg_api_define.h"
 
 extern "C" {
-    #include "libyuv.h"
-    #include <libavcodec/avcodec.h>
+#include <libavutil/frame.h>
+#include "libyuv.h"
+#include <libavutil/imgutils.h>
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
 }
 
 #define UNSUPPORTED_ERROR -2
@@ -26,26 +29,33 @@ static jfieldID dataField;
 static jfieldID timeFrameUsField;
 
 static int lastFFmpegErrorCode = 0;
-static AVFrame* holdFrame = NULL;
+static AVFrame *holdFrame = NULL;
 
 // 打印错误
 void logError(const char *functionName, int errorNumber);
+
 // 获取相应的编码器
-AVCodec *getCodecByName(JNIEnv* env, jstring codecName);
+AVCodec *getCodecByName(JNIEnv *env, jstring codecName);
+
 // 初始化java层对应的成员变量或者方法
 void initJavaRef(JNIEnv *env);
+
 // 创建上下文
 AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
-                              jint  width, jint height,
+                              jint width, jint height,
                               jbyteArray extraData, jint threadCount);
+
 // 释放上下文
 void releaseContext(AVCodecContext *context);
+
 // 解码相应packet
 int decodePacket(AVCodecContext *context, AVPacket *packet);
-// 把解码后的frame放入到outputBuffer
-int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer);
 
-DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jint  width,
+// 把解码后的frame放入到outputBuffer
+int
+putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame, jobject jOutputBuffer);
+
+DECODER_FUNC(jlong, ffmpegInit, jstring codecName, jint width,
              jint height, jbyteArray extraData, jint threadCount) {
     avcodec_register_all();
     AVCodec *codec = getCodecByName(env, codecName);
@@ -58,8 +68,8 @@ DECODER_FUNC(jlong , ffmpegInit, jstring codecName, jint  width,
     return (jlong) createContext(env, codec, width, height, extraData, threadCount);
 }
 
-DECODER_FUNC(jint , ffmpegClose, jlong jContext) {
-    AVCodecContext* pCodecContext = (AVCodecContext*)jContext;
+DECODER_FUNC(jint, ffmpegClose, jlong jContext) {
+    AVCodecContext *pCodecContext = (AVCodecContext *) jContext;
     releaseContext(pCodecContext);
     if (holdFrame != NULL) {
         av_frame_free(&holdFrame);
@@ -67,17 +77,17 @@ DECODER_FUNC(jint , ffmpegClose, jlong jContext) {
     return NO_ERROR;
 }
 
-DECODER_FUNC(void , ffmpegFlushBuffers, jlong jContext) {
-    AVCodecContext* context = (AVCodecContext*)jContext;
+DECODER_FUNC(void, ffmpegFlushBuffers, jlong jContext) {
+    AVCodecContext *context = (AVCodecContext *) jContext;
     avcodec_flush_buffers(context);
 }
 
-DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
+DECODER_FUNC(jint, ffmpegDecode, jlong jContext, jobject encoded, jint len,
              jlong timeUs,
              jboolean isDecodeOnly,
              jboolean isEndOfStream,
              jboolean isKeyFrame) {
-    AVCodecContext* context = (AVCodecContext*)jContext;
+    AVCodecContext *context = (AVCodecContext *) jContext;
     uint8_t *packetBuffer = (uint8_t *) env->GetDirectBufferAddress(encoded);
 
     int result = NO_ERROR;
@@ -111,14 +121,14 @@ DECODER_FUNC(jint , ffmpegDecode, jlong jContext, jobject encoded, jint len,
     return result;
 }
 
-DECODER_FUNC(jint , ffmpegSecureDecode,
+DECODER_FUNC(jint, ffmpegSecureDecode,
              jlong jContext,
              jobject encoded,
              jint len,
              jobject mediaCrypto,
              jint inputMode,
-             jbyteArray&,
-             jbyteArray&,
+             jbyteArray &,
+             jbyteArray &,
              jint inputNumSubSamples,
              jintArray numBytesOfClearData,
              jintArray numBytesOfEncryptedData,
@@ -131,7 +141,7 @@ DECODER_FUNC(jint , ffmpegSecureDecode,
 
 DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     int result = 0;
-    AVCodecContext* context = (AVCodecContext*)jContext;
+    AVCodecContext *context = (AVCodecContext *) jContext;
 
     if (holdFrame == NULL) {
         holdFrame = av_frame_alloc();
@@ -142,8 +152,8 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     // 所以把AVERROR_INVALIDDATA当做EOF处理
     // TODO 把AVERROR_INVALIDDATA当做EOF处理是否得当？
     if (error == 0) {
-        result = putFrameToOutputBuffer(env, holdFrame, jOutputBuffer);
-    } else if (error == AVERROR(EAGAIN)){
+        result = putFrameToOutputBuffer(env, context, holdFrame, jOutputBuffer);
+    } else if (error == AVERROR(EAGAIN)) {
         // packet还不够
         result = DECODE_AGAIN;
     } else if (error == AVERROR_EOF || error == AVERROR_INVALIDDATA) {
@@ -155,7 +165,7 @@ DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) {
     return result;
 }
 
-DECODER_FUNC(jint , ffmpegGetErrorCode, jlong jContext) {
+DECODER_FUNC(jint, ffmpegGetErrorCode, jlong jContext) {
     return lastFFmpegErrorCode;
 }
 
@@ -166,7 +176,7 @@ void logError(const char *functionName, int errorNumber) {
     free(buffer);
 }
 
-AVCodec *getCodecByName(JNIEnv* env, jstring codecName) {
+AVCodec *getCodecByName(JNIEnv *env, jstring codecName) {
     if (!codecName) {
         return NULL;
     }
@@ -177,13 +187,16 @@ AVCodec *getCodecByName(JNIEnv* env, jstring codecName) {
 }
 
 AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
-                              jint  width, jint height,
+                              jint width, jint height,
                               jbyteArray extraData, jint threadCount) {
     AVCodecContext *context = avcodec_alloc_context3(codec);
     if (!context) {
         LOGE("Failed to allocate avcodec context.");
         return NULL;
     }
+    context->bits_per_coded_sample = 10;
+    context->profile = FF_PROFILE_HEVC_MAIN_10;
+    context->opaque = NULL;
     if (extraData != NULL) {
         jsize size = env->GetArrayLength(extraData);
         context->extradata_size = size;
@@ -210,6 +223,7 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
     context->width = width;
     context->height = height;
 
+
     return context;
 }
 
@@ -228,10 +242,18 @@ void releaseContext(AVCodecContext *pCodecContext) {
     if (!pCodecContext) {
         return;
     }
+
     if (pCodecContext->extradata != NULL) {
         av_free(pCodecContext->extradata);
         pCodecContext->extradata = NULL;
     }
+
+    if (pCodecContext->opaque != NULL) {
+        SwsContext *swsContext = static_cast<SwsContext *>(pCodecContext->opaque);
+        sws_freeContext(swsContext);
+        pCodecContext->opaque = NULL;
+    }
+
     avcodec_free_context(&pCodecContext);
 }
 
@@ -249,31 +271,71 @@ int decodePacket(AVCodecContext *context, AVPacket *packet) {
     return result;
 }
 
-int putFrameToOutputBuffer(JNIEnv *env, AVFrame *frame, jobject jOutputBuffer) {
-    const int kOutputModeYuv = 0;
-    const int kOutputModeRgb = 1;
-
+int putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame,
+                           jobject jOutputBuffer) {
     env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
 
+    int supportFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUV420P10LE, AV_PIX_FMT_YUV444P10LE};
+    bool isFormatSupported = false;
+    for (int i = 0; i < 4; i++) {
+        if (supportFormats[i] == frame->format) {
+            isFormatSupported = true;
+            break;
+        }
+    }
+
+    int outputFormat = frame->format;
+    if (!isFormatSupported) {
+        outputFormat = AV_PIX_FMT_YUV420P;
+    }
+
+    int bitDepth = 1;
+    if (outputFormat == AV_PIX_FMT_YUV420P10LE) {
+        bitDepth = 2;
+    }
+
+    int outputLineSize[4];
+    av_image_fill_linesizes(outputLineSize, static_cast<AVPixelFormat>(outputFormat), frame->width);
     // resize buffer if required.
     jboolean initResult = env->CallBooleanMethod(
             jOutputBuffer, initForYuvFrame, frame->width, frame->height,
-            frame->linesize[0], frame->linesize[1], 1);
+            outputLineSize[0], outputLineSize[1], bitDepth);
     if (env->ExceptionCheck() || !initResult) {
         return OUTPUT_BUFFER_ALLOCATE_FAILED;
     }
 
     // get pointer to the data buffer.
     const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-    jbyte* const data = reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
+    jbyte *const data = reinterpret_cast<jbyte *>(env->GetDirectBufferAddress( dataObject));
 
-    const int32_t uvHeight = (frame->height + 1) / 2;
-    const uint64_t yLength = frame->linesize[0] * frame->height;
-    const uint64_t uvLength = frame->linesize[1] * uvHeight;
-
-    memcpy(data, frame->data[0], yLength);
-    memcpy(data + yLength, frame->data[1], uvLength);
-    memcpy(data + yLength + uvLength, frame->data[2], uvLength);
-
+    if (!isFormatSupported) {
+        if (!context->opaque) {
+            SwsContext *pSwsContext = sws_getCachedContext(NULL,
+                                                           frame->width,
+                                                           frame->height,
+                                                           static_cast<AVPixelFormat>(frame->format),
+                                                           frame->width,
+                                                           frame->height,
+                                                           static_cast<AVPixelFormat>(outputFormat),
+                                                           SWS_BICUBIC,
+                                                           NULL,
+                                                           NULL,
+                                                           NULL);
+            context->opaque = pSwsContext;
+        }
+        SwsContext *swsContext = static_cast<SwsContext *>(context->opaque);
+        uint8_t *dst_data[4];
+        av_image_fill_pointers(dst_data,
+                             static_cast<AVPixelFormat>(outputFormat),
+                             frame->height,
+                             (uint8_t *) data,
+                             outputLineSize);
+        sws_scale(swsContext, (const uint8_t **) frame->data, frame->linesize, 0,
+                  frame->width, dst_data, outputLineSize);
+    } else {
+        int outputSize = av_image_get_buffer_size(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, 1);
+        av_image_copy_to_buffer((uint8_t *) data, outputSize, frame->data, frame->linesize,
+                                static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, 1);
+    }
     return NO_ERROR;
 }

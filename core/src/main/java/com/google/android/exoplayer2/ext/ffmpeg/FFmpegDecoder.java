@@ -15,6 +15,8 @@
  */
 package com.google.android.exoplayer2.ext.ffmpeg;
 
+import android.annotation.SuppressLint;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
@@ -30,7 +32,8 @@ import java.util.List;
 /**
  * ffmpeg decoder.
  */
-/* package */ final class FFmpegDecoder extends FFmpegBaseDecoder {
+@SuppressLint("WrongConstant")
+final class FFmpegDecoder extends FFmpegBaseDecoder {
     private static final int NO_ERROR = 0;
     private static final int DECODE_ERROR = 1;
     private static final int DRM_ERROR = 2;

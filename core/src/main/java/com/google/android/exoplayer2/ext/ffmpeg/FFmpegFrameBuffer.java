@@ -22,13 +22,8 @@ import java.nio.ByteBuffer;
 /**
  * Output buffer containing video frame data, populated by {@link FFmpegDecoder}.
  */
-/* package */ final class FFmpegFrameBuffer extends OutputBuffer {
-
-  public static final int COLORSPACE_UNKNOWN = 0;
-  public static final int COLORSPACE_BT601 = 1;
-  public static final int COLORSPACE_BT709 = 2;
-  public static final int COLORSPACE_BT2020 = 3;
-
+/* package */
+final class FFmpegFrameBuffer extends OutputBuffer {
   private final FFmpegDecoder owner;
 
   public ByteBuffer data;
@@ -40,7 +35,7 @@ import java.nio.ByteBuffer;
    */
   public ByteBuffer[] yuvPlanes;
   public int[] yuvStrides;
-  public int colorspace;
+  public int bitDepth;
 
   public FFmpegFrameBuffer(FFmpegDecoder owner) {
     this.owner = owner;
@@ -56,14 +51,16 @@ import java.nio.ByteBuffer;
    * @return Whether the buffer was resized successfully.
    */
   public boolean initForYuvFrame(int width, int height, int yStride, int uvStride,
-      int colorspace) {
+      int bitDepth) {
     this.width = width;
     this.height = height;
-    this.colorspace = colorspace;
+    this.bitDepth = bitDepth;
+
     int uvHeight = (int) (((long) height + 1) / 2);
     if (!isSafeToMultiply(yStride, height) || !isSafeToMultiply(uvStride, uvHeight)) {
       return false;
     }
+
     int yLength = yStride * height;
     int uvLength = uvStride * uvHeight;
     int minimumYuvSize = yLength + (uvLength * 2);
@@ -75,7 +72,6 @@ import java.nio.ByteBuffer;
     if (yuvPlanes == null) {
       yuvPlanes = new ByteBuffer[3];
     }
-    // Rewrapping has to be done on every frame since the stride might have changed.
     yuvPlanes[0] = data.slice();
     yuvPlanes[0].limit(yLength);
     data.position(yLength);
