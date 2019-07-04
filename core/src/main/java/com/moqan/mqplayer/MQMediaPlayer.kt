@@ -8,6 +8,7 @@ import android.view.SurfaceView
 import android.view.TextureView
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.audio.AudioAttributes
+import com.google.android.exoplayer2.audio.AudioListener
 import com.google.android.exoplayer2.audio.AudioProcessor
 import com.google.android.exoplayer2.audio.AudioRendererEventListener
 import com.google.android.exoplayer2.database.ExoDatabaseProvider
@@ -25,6 +26,7 @@ import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
 import com.google.android.exoplayer2.upstream.*
 import com.google.android.exoplayer2.upstream.cache.*
 import com.google.android.exoplayer2.util.Util
+import com.google.android.exoplayer2.video.VideoListener
 import com.google.android.exoplayer2.video.VideoRendererEventListener
 import java.io.File
 import java.util.ArrayList
@@ -73,37 +75,46 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
 
     private val listeners = CopyOnWriteArrayList<IMediaPlayer.EventListener>()
 
-    private var lastPlayState = false
     private var prepared = false
+    private var resetPositionWhenPrepare = true
 
     init {
+        player.addAudioListener(object : AudioListener {
+            override fun onVolumeChanged(volume: Float) {
+                listeners.forEach {
+                    it.onVolumeChanged(volume)
+                }
+            }
+        })
+
+        player.addVideoListener(object : VideoListener {
+            override fun onVideoSizeChanged(width: Int, height: Int, unappliedRotationDegrees: Int, pixelWidthHeightRatio: Float) {
+                listeners.forEach {
+                    it.onVideoSizeChanged(width, height, unappliedRotationDegrees, pixelWidthHeightRatio)
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                listeners.forEach {
+                    it.onRenderedFirstFrame()
+                }
+            }
+        })
+
         player.addListener(object : Player.EventListener {
+            private var speed = 1.0f
+            private var playing = false
+            private var duration = C.TIME_UNSET
+
+            override fun onTimelineChanged(timeline: Timeline, manifest: Any?, reason: Int) {
+                if (!timeline.isEmpty && getDuration() != duration) {
+                    duration = getDuration()
+                    listeners.forEach { it.onDurationChanged(duration) }
+                }
+            }
+
             override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-                if (lastPlayState != playWhenReady) {
-                    lastPlayState = playWhenReady;
-                    if (playWhenReady) {
-                    } else {
-
-                    }
-                }
-
-                when (playbackState) {
-                    Player.STATE_IDLE -> {
-
-                    }
-
-                    Player.STATE_BUFFERING -> {
-                        listeners.forEach { it.onBuffering(player.bufferedPercentage) }
-                    }
-
-                    Player.STATE_READY -> {
-                        listeners.forEach { it.onPlaying() }
-                    }
-
-                    Player.STATE_ENDED -> {
-                        listeners.forEach { it.onPlayComplete() }
-                    }
-                }
+                listeners.forEach { it.onPlaybackStateChanged(playWhenReady, playbackState) }
             }
 
             override fun onSeekProcessed() {
@@ -113,8 +124,13 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
                 }
             }
 
-            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters?) {
-
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                if (playbackParameters.speed != speed) {
+                    speed = playbackParameters.speed
+                    listeners.forEach {
+                        it.onPlaySpeedChange(speed)
+                    }
+                }
             }
 
             override fun onPlayerError(error: ExoPlaybackException) {
@@ -135,34 +151,24 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
             else -> throw IllegalStateException("Unsupported type: $type")
         }
         this.dataSource = dataSource
+        resetPositionWhenPrepare = true
     }
 
     override fun prepare() {
-        player.prepare(dataSource, true, false)
-        prepared = true
+        player.prepare(dataSource, false, false)
     }
 
-    override fun start() {
-        player.playWhenReady = true
-    }
-
-    override fun resume() {
-        player.playWhenReady = true
-    }
-
-    override fun pause() {
-        player.playWhenReady = false
+    override fun setPlayWhenReady(play: Boolean) {
+        player.playWhenReady = play
     }
 
     override fun stop() {
-        player.playWhenReady = false
         player.stop()
     }
 
     override fun reset() {
+        resetPositionWhenPrepare = true
         player.stop(true)
-        this.dataSource = null
-        this.prepared = false
     }
 
     override fun release() {
@@ -181,19 +187,15 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
 
     override fun isPrepared() = prepared
 
-    override fun isReleased(): Boolean {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun setSurfaceView(surfaceView: SurfaceView?) {
+    override fun setDisplay(surfaceView: SurfaceView?) {
         player.setVideoSurfaceView(surfaceView)
     }
 
-    override fun setSurfaceHolder(surfaceHolder: SurfaceHolder?) {
+    override fun setDisplay(surfaceHolder: SurfaceHolder?) {
         player.setVideoSurfaceHolder(surfaceHolder)
     }
 
-    override fun setTextureView(textureView: TextureView?) {
+    override fun setDisplay(textureView: TextureView?) {
         player.setVideoTextureView(textureView)
     }
 

@@ -165,20 +165,7 @@ class FrameRenderer implements GLViewRenderer, IFrameRenderer {
     }
 
     FrameBuffer outputBuffer = renderedOutputBuffer;
-    // Set color matrix. Assume BT709 if the color space is unknown.
     float[] colorConversion = kColorConversion709;
-    /*switch (outputBuffer.pixelFormat) {
-      case FrameBuffer.COLORSPACE_BT601:
-        colorConversion = kColorConversion601;
-        break;
-      case FrameBuffer.COLORSPACE_BT2020:
-        colorConversion = kColorConversion2020;
-        break;
-      case FrameBuffer.COLORSPACE_BT709:
-      default:
-        break; // Do nothing
-    }*/
-
     int bitDepth = outputBuffer.bitDepth;
     int format = bitDepth == 1 ? GLES20.GL_LUMINANCE : GLES20.GL_LUMINANCE_ALPHA;
 
