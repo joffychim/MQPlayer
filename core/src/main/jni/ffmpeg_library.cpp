@@ -21,3 +21,13 @@ LIBRARY_FUNC(jstring, ffmpegGetVersion) {
 LIBRARY_FUNC(jstring, ffmpegGetBuildConfig) {
     return env->NewStringUTF("moqan ffmpeg");
 }
+
+AVCodec *getCodecByName(JNIEnv* env, jstring codecName) {
+    if (!codecName) {
+        return NULL;
+    }
+    const char *codecNameChars = env->GetStringUTFChars(codecName, NULL);
+    AVCodec *codec = avcodec_find_decoder_by_name(codecNameChars);
+    env->ReleaseStringUTFChars(codecName, codecNameChars);
+    return codec;
+}

@@ -6,7 +6,8 @@ include_directories(BEFORE ${PROJECT_SOURCE_DIR}/../../../libs/yuv/include)
 
 add_library(mqplayer
             SHARED
-            ffmpeg_decoder.cpp
+            ffmpeg_video_decoder.cpp
+            ffmpeg_audio_decoder.cpp
             ffmpeg_library.cpp)
 
 find_library(log-lib
