@@ -75,9 +75,6 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
 
     private val listeners = CopyOnWriteArrayList<IMediaPlayer.EventListener>()
 
-    private var prepared = false
-    private var resetPositionWhenPrepare = true
-
     init {
         player.addAudioListener(object : AudioListener {
             override fun onVolumeChanged(volume: Float) {
@@ -151,7 +148,6 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
             else -> throw IllegalStateException("Unsupported type: $type")
         }
         this.dataSource = dataSource
-        resetPositionWhenPrepare = true
     }
 
     override fun prepare() {
@@ -167,7 +163,6 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
     }
 
     override fun reset() {
-        resetPositionWhenPrepare = true
         player.stop(true)
     }
 
@@ -184,8 +179,6 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
     override fun getDuration() = player.duration
 
     override fun isPlaying() = player.playWhenReady && player.playbackState == Player.STATE_READY
-
-    override fun isPrepared() = prepared
 
     override fun setDisplay(surfaceView: SurfaceView?) {
         player.setVideoSurfaceView(surfaceView)

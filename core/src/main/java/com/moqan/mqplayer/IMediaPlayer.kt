@@ -39,7 +39,6 @@ interface IMediaPlayer {
     fun release()
 
     fun isPlaying(): Boolean
-    fun isPrepared(): Boolean
 
     fun seekTo(position: Long)
 
