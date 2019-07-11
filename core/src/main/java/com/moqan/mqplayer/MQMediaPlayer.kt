@@ -1,12 +1,15 @@
 package com.moqan.mqplayer
 
 import android.content.Context
+import android.graphics.Point
 import android.net.Uri
 import android.os.Handler
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import com.google.android.exoplayer2.*
+import com.google.android.exoplayer2.Player.REPEAT_MODE_ALL
+import com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
 import com.google.android.exoplayer2.audio.AudioAttributes
 import com.google.android.exoplayer2.audio.AudioListener
 import com.google.android.exoplayer2.audio.AudioProcessor
@@ -15,6 +18,7 @@ import com.google.android.exoplayer2.database.ExoDatabaseProvider
 import com.google.android.exoplayer2.drm.DrmSessionManager
 import com.google.android.exoplayer2.drm.FrameworkMediaCrypto
 import com.google.android.exoplayer2.ext.ffmpeg.audio.SoftAudioRenderer
+import com.google.android.exoplayer2.ext.ffmpeg.video.FrameScaleType
 import com.google.android.exoplayer2.ext.ffmpeg.video.SoftVideoRenderer
 import com.google.android.exoplayer2.mediacodec.MediaCodecSelector
 import com.google.android.exoplayer2.source.MediaSource
@@ -61,11 +65,11 @@ private class RenderFactoryImp : DefaultRenderersFactory {
     }
 }
 
+private var downloadCache: SimpleCache? = null
+
 class MQMediaPlayer(private val context: Context) : IMediaPlayer {
     private val player = MQExoPlayer(context, RenderFactoryImp(context), DefaultTrackSelector(), DefaultLoadControl(), null)
 
-    private val downloadDirectory = context.getExternalFilesDir(null) ?: context.filesDir
-    private val downloadCache = SimpleCache(File(downloadDirectory, "downloads"), NoOpCacheEvictor(), ExoDatabaseProvider(context))
     private val dataSourceFactory: DataSource.Factory by lazy {
         val httpDataSource = DefaultHttpDataSourceFactory(Util.getUserAgent(context, "MQPlayer"))
         val upstreamFactory = DefaultDataSourceFactory(context, httpDataSource)
@@ -76,6 +80,15 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
     private val listeners = CopyOnWriteArrayList<IMediaPlayer.EventListener>()
 
     init {
+        if (downloadCache == null) {
+            synchronized(MQMediaPlayer::class) {
+                if (downloadCache == null) {
+                    val downloadDirectory = context.getExternalFilesDir(null) ?: context.filesDir
+                    downloadCache = SimpleCache(File(downloadDirectory, "downloads"), NoOpCacheEvictor(), ExoDatabaseProvider(context))
+                }
+            }
+        }
+
         player.addAudioListener(object : AudioListener {
             override fun onVolumeChanged(volume: Float) {
                 listeners.forEach {
@@ -174,6 +187,14 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
         player.seekTo(position)
     }
 
+    override fun setLooping(looping: Boolean) {
+        player.repeatMode = if (looping) REPEAT_MODE_ALL else REPEAT_MODE_OFF
+    }
+
+    override fun isLooping(): Boolean {
+        return player.repeatMode != REPEAT_MODE_OFF
+    }
+
     override fun getCurrentPosition() =  player.currentPosition
 
     override fun getDuration() = player.duration
@@ -214,4 +235,11 @@ class MQMediaPlayer(private val context: Context) : IMediaPlayer {
         listeners.remove(listener)
     }
 
+    override fun setBackgroundColor(color: Int) {
+        player.setBackgroundColor(color)
+    }
+
+    override fun setScaleType(scaleType: FrameScaleType) {
+        player.setScaleType(scaleType)
+    }
 }

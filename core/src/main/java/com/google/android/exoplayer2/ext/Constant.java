@@ -11,4 +11,6 @@ public class Constant {
 
     public static final int MSG_SURFACE_SIZE_CHANGED = MSG_CUSTOM_BASE + 100;
     public static final int MSG_PLAY_RELEASED = MSG_CUSTOM_BASE + 101;
+    public static final int MSG_SET_BACKGROUND_COLOR = MSG_CUSTOM_BASE + 102;
+    public static final int MSG_SET_SCALE_TYPE = MSG_CUSTOM_BASE + 103;
 }

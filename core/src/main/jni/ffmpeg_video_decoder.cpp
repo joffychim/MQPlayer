@@ -23,25 +23,48 @@ extern "C" {
 
 #define ERROR_STRING_BUFFER_LENGTH 256
 
-// JNI references for FFmpegFrameBuffer class.
-static jmethodID initForRgbFrame;
-static jmethodID initForYuvFrame;
-static jfieldID dataField;
-static jfieldID timeFrameUsField;
+class AVOpaqueData {
+public:
+    AVOpaqueData() {
+        frame = NULL;
+        swsContext = NULL;
+        lastErrorCode = 0;
 
-static int lastFFmpegErrorCode = 0;
-static AVFrame *holdFrame = NULL;
+        javaInitForYuvFrameMethod = NULL;
+        javaDataField = NULL;
+        javaTimeFrameUsField = NULL;
+    }
+
+    ~AVOpaqueData() {
+        if (frame != NULL) {
+            av_frame_free(&frame);
+        }
+
+        if (swsContext != NULL) {
+            sws_freeContext(swsContext);
+        }
+        swsContext = NULL;
+    }
+
+    AVFrame* frame;
+    SwsContext* swsContext;
+    int lastErrorCode;
+
+    jmethodID javaInitForYuvFrameMethod;
+    jfieldID javaDataField;
+    jfieldID javaTimeFrameUsField;
+};
 
 // 打印错误
 static void logError(const char *functionName, int errorNumber);
 
 // 初始化java层对应的成员变量或者方法
-static void initJavaRef(JNIEnv *env);
+static void initJavaRef(JNIEnv *env, AVOpaqueData* opaqueData);
 
 // 创建上下文
 static AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
-                              jint width, jint height,
-                              jbyteArray extraData, jint threadCount);
+                                     jint width, jint height,
+                                     jbyteArray extraData, jint threadCount);
 
 // 释放上下文
 static void releaseContext(AVCodecContext *context);
@@ -62,16 +85,12 @@ VIDEO_DECODER_FUNC(jlong, ffmpegInit, jstring codecName, jint width,
         return 0;
     }
 
-    initJavaRef(env);
     return (jlong) createContext(env, codec, width, height, extraData, threadCount);
 }
 
 VIDEO_DECODER_FUNC(jint, ffmpegClose, jlong jContext) {
     AVCodecContext *pCodecContext = (AVCodecContext *) jContext;
     releaseContext(pCodecContext);
-    if (holdFrame != NULL) {
-        av_frame_free(&holdFrame);
-    }
     return NO_ERROR;
 }
 
@@ -141,16 +160,17 @@ VIDEO_DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) 
     int result = 0;
     AVCodecContext *context = (AVCodecContext *) jContext;
 
-    if (holdFrame == NULL) {
-        holdFrame = av_frame_alloc();
+    AVOpaqueData* opaqueData = static_cast<AVOpaqueData *>(context->opaque);
+    if (opaqueData->frame == NULL) {
+        opaqueData->frame = av_frame_alloc();
     }
 
-    int error = avcodec_receive_frame(context, holdFrame);
+    int error = avcodec_receive_frame(context, opaqueData->frame);
     // 测试只有三帧的视频，send null packet后，解最后一帧出现AVERROR_INVALIDDATA错误
     // 所以把AVERROR_INVALIDDATA当做EOF处理
     // TODO 把AVERROR_INVALIDDATA当做EOF处理是否得当？
     if (error == 0) {
-        result = putFrameToOutputBuffer(env, context, holdFrame, jOutputBuffer);
+        result = putFrameToOutputBuffer(env, context, opaqueData->frame, jOutputBuffer);
     } else if (error == AVERROR(EAGAIN)) {
         // packet还不够
         result = DECODE_AGAIN;
@@ -159,12 +179,14 @@ VIDEO_DECODER_FUNC(jint, ffmpegGetFrame, jlong jContext, jobject jOutputBuffer) 
     } else {
         result = DECODE_ERROR;
     }
-    lastFFmpegErrorCode = error;
+    opaqueData->lastErrorCode = error;
     return result;
 }
 
 VIDEO_DECODER_FUNC(jint, ffmpegGetErrorCode, jlong jContext) {
-    return lastFFmpegErrorCode;
+    AVCodecContext *context = (AVCodecContext *) jContext;
+    AVOpaqueData* opaqueData = static_cast<AVOpaqueData *>(context->opaque);
+    return opaqueData->lastErrorCode;
 }
 
 void logError(const char *functionName, int errorNumber) {
@@ -184,7 +206,7 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
     }
     context->bits_per_coded_sample = 10;
     context->profile = FF_PROFILE_HEVC_MAIN_10;
-    context->opaque = NULL;
+
     if (extraData != NULL) {
         jsize size = env->GetArrayLength(extraData);
         context->extradata_size = size;
@@ -208,22 +230,26 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
         return NULL;
     }
 
+
     context->width = width;
     context->height = height;
 
+    AVOpaqueData* opaqueData = new AVOpaqueData();
+    context->opaque = opaqueData;
+    initJavaRef(env, opaqueData);
 
     return context;
 }
 
-void initJavaRef(JNIEnv *env) {
+void initJavaRef(JNIEnv *env, AVOpaqueData* opaqueData) {
     // Populate JNI References.
     const jclass outputBufferClass = env->FindClass(
             "com/google/android/exoplayer2/ext/ffmpeg/video/FrameBuffer");
-    initForYuvFrame = env->GetMethodID(outputBufferClass, "initForYuvFrame",
+    opaqueData->javaInitForYuvFrameMethod = env->GetMethodID(outputBufferClass, "initForYuvFrame",
                                        "(IIIII)Z");
-    dataField = env->GetFieldID(outputBufferClass, "data",
+    opaqueData->javaDataField = env->GetFieldID(outputBufferClass, "data",
                                 "Ljava/nio/ByteBuffer;");
-    timeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
+    opaqueData->javaTimeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
 }
 
 void releaseContext(AVCodecContext *pCodecContext) {
@@ -237,8 +263,8 @@ void releaseContext(AVCodecContext *pCodecContext) {
     }
 
     if (pCodecContext->opaque != NULL) {
-        SwsContext *swsContext = static_cast<SwsContext *>(pCodecContext->opaque);
-        sws_freeContext(swsContext);
+        AVOpaqueData *opaqueData = static_cast<AVOpaqueData *>(pCodecContext->opaque);
+        delete opaqueData;
         pCodecContext->opaque = NULL;
     }
 
@@ -246,6 +272,8 @@ void releaseContext(AVCodecContext *pCodecContext) {
 }
 
 int decodePacket(AVCodecContext *context, AVPacket *packet) {
+    AVOpaqueData *opaqueData = static_cast<AVOpaqueData *>(context->opaque);
+
     // Queue input data.
     int result = NO_ERROR;
     int ffError = avcodec_send_packet(context, packet);
@@ -255,13 +283,15 @@ int decodePacket(AVCodecContext *context, AVPacket *packet) {
         result = DECODE_ERROR;
     }
 
-    lastFFmpegErrorCode = ffError;
+    opaqueData->lastErrorCode = ffError;
     return result;
 }
 
 int putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame,
                            jobject jOutputBuffer) {
-    env->SetLongField(jOutputBuffer, timeFrameUsField, frame->pts);
+    AVOpaqueData *opaqueData = static_cast<AVOpaqueData *>(context->opaque);
+
+    env->SetLongField(jOutputBuffer, opaqueData->javaTimeFrameUsField, frame->pts);
 
     int supportFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUV420P10LE, AV_PIX_FMT_YUV444P10LE};
     bool isFormatSupported = false;
@@ -286,18 +316,18 @@ int putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame,
     av_image_fill_linesizes(outputLineSize, static_cast<AVPixelFormat>(outputFormat), frame->width);
     // resize buffer if required.
     jboolean initResult = env->CallBooleanMethod(
-            jOutputBuffer, initForYuvFrame, frame->width, frame->height,
+            jOutputBuffer, opaqueData->javaInitForYuvFrameMethod, frame->width, frame->height,
             outputLineSize[0], outputLineSize[1], bitDepth);
     if (env->ExceptionCheck() || !initResult) {
         return OUTPUT_BUFFER_ALLOCATE_FAILED;
     }
 
     // get pointer to the data buffer.
-    const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+    const jobject dataObject = env->GetObjectField(jOutputBuffer, opaqueData->javaDataField);
     jbyte *const data = reinterpret_cast<jbyte *>(env->GetDirectBufferAddress( dataObject));
 
     if (!isFormatSupported) {
-        if (!context->opaque) {
+        if (!opaqueData->swsContext) {
             SwsContext *pSwsContext = sws_getCachedContext(NULL,
                                                            frame->width,
                                                            frame->height,
@@ -309,9 +339,9 @@ int putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame,
                                                            NULL,
                                                            NULL,
                                                            NULL);
-            context->opaque = pSwsContext;
+            opaqueData->swsContext = pSwsContext;
         }
-        SwsContext *swsContext = static_cast<SwsContext *>(context->opaque);
+        SwsContext *swsContext = opaqueData->swsContext;
         uint8_t *dst_data[4];
         av_image_fill_pointers(dst_data,
                              static_cast<AVPixelFormat>(outputFormat),

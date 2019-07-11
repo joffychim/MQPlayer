@@ -14,7 +14,8 @@ import com.google.android.exoplayer2.analytics.AnalyticsCollector
 import com.google.android.exoplayer2.drm.DrmSessionManager
 import com.google.android.exoplayer2.drm.FrameworkMediaCrypto
 import com.google.android.exoplayer2.ext.Constant
-import com.google.android.exoplayer2.ext.Constant.MSG_PLAY_RELEASED
+import com.google.android.exoplayer2.ext.Constant.*
+import com.google.android.exoplayer2.ext.ffmpeg.video.FrameScaleType
 import com.google.android.exoplayer2.trackselection.TrackSelector
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter
 import java.util.*
@@ -143,5 +144,23 @@ internal class MQExoPlayer @JvmOverloads constructor(
         origSurfaceTextureListener = null
 
         this.surfaceHolder?.removeCallback(surfaceCallback)
+    }
+
+    fun setBackgroundColor(color: Int) {
+        val messages = mutableListOf<PlayerMessage>()
+        renderers.firstOrNull { it.trackType == C.TRACK_TYPE_VIDEO }?.let {
+            messages.add(createMessage(it).setType(MSG_SET_BACKGROUND_COLOR).setPayload(color).send())
+        }
+
+        messages.forEach { it.blockUntilDelivered() }
+    }
+
+    fun setScaleType(scaleType: FrameScaleType) {
+        val messages = mutableListOf<PlayerMessage>()
+        renderers.firstOrNull { it.trackType == C.TRACK_TYPE_VIDEO }?.let {
+            messages.add(createMessage(it).setType(MSG_SET_SCALE_TYPE).setPayload(scaleType).send())
+        }
+
+        messages.forEach { it.blockUntilDelivered() }
     }
 }

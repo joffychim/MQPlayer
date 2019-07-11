@@ -5,6 +5,7 @@ import android.net.Uri
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
+import com.google.android.exoplayer2.ext.ffmpeg.video.FrameScaleType
 
 /*
  * @author joffychim  <zhanzenghui@bytedance.com>
@@ -30,6 +31,7 @@ interface IMediaPlayer {
 
     fun setDataSource(uri: Uri)
 
+    fun setLooping(looping: Boolean)
     fun setPlayWhenReady(play: Boolean)
 
     fun prepare()
@@ -39,6 +41,7 @@ interface IMediaPlayer {
     fun release()
 
     fun isPlaying(): Boolean
+    fun isLooping(): Boolean
 
     fun seekTo(position: Long)
 
@@ -51,4 +54,7 @@ interface IMediaPlayer {
 
     fun addListener(listener: EventListener)
     fun removeListener(listener: EventListener)
+
+    fun setBackgroundColor(color: Int)
+    fun setScaleType(scaleType: FrameScaleType)
 }
