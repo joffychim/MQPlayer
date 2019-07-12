@@ -78,8 +78,10 @@ final class VideoDecoder extends BaseDecoder {
 
         int width = format.width;
         int height = format.height;
+        int rotationDegrees = format.rotationDegrees;
 
         ffmpegDecContext = ffmpegInit(codecName,
+                rotationDegrees,
                 width,
                 height,
                 getExtraData(mimeType, format.initializationData),
@@ -221,7 +223,7 @@ final class VideoDecoder extends BaseDecoder {
         return extraData;
     }
 
-    private native long ffmpegInit(String codecName, int width, int height,
+    private native long ffmpegInit(String codecName, int rotationDegrees, int width, int height,
                                    byte[] extraData, int threadCount);
 
     private native int ffmpegClose(long context);

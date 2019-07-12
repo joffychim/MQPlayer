@@ -111,6 +111,7 @@ class FrameRenderer implements GLViewRenderer, IFrameRenderer {
 
     private int surfaceWidth, surfaceHeight;
     private int previousSurfaceWidth, previousSurfaceHeight;
+    private int previousRotationDegree;
 
     private float bgColorAlpha = 1.0f;
     private float bgColorRed = 0.f;
@@ -223,47 +224,64 @@ class FrameRenderer implements GLViewRenderer, IFrameRenderer {
                 previousStride != outputBuffer.yuvStrides[0] ||
                 previousSurfaceWidth != surfaceWidth ||
                 previousSurfaceHeight != surfaceHeight ||
-                previousScaleType != scaleType) {
-            float crop = (float) outputBuffer.width * bitDepth / outputBuffer.yuvStrides[0];
+                previousScaleType != scaleType ||
+                previousRotationDegree != outputBuffer.rotationDegree) {
 
             float verticalAspect = 0.f;
             float horizontalAspect = 0.f;
 
+            int width = outputBuffer.width;
+            int height = outputBuffer.height;
+
+            int rotationDegree = outputBuffer.rotationDegree;
+
+            if (rotationDegree == 90 || rotationDegree == 270) {
+                int tmp = width;
+                width = height;
+                height = tmp;
+            }
+
             if (scaleType != FrameScaleType.FIT_XY) {
                 if (scaleType == FrameScaleType.FIT_CENTER) {
-                    if (outputBuffer.width / (float)surfaceWidth >= outputBuffer.height / (float)surfaceHeight) {
-                        float textureHeight = (float) surfaceWidth * outputBuffer.height / outputBuffer.width;
+                    if (width / (float)surfaceWidth >= height / (float)surfaceHeight) {
+                        float textureHeight = (float) surfaceWidth * height / width;
                         verticalAspect = (textureHeight - surfaceHeight) / 2f / textureHeight;
                     } else {
-                        float textureWidth = (float) surfaceHeight * outputBuffer.width / outputBuffer.height;
+                        float textureWidth = (float) surfaceHeight * width / height;
                         horizontalAspect = (textureWidth - surfaceWidth) / 2f / textureWidth;
                     }
                 } else if (scaleType == FrameScaleType.FIT_X) {
-                    float textureHeight = (float) surfaceWidth * outputBuffer.height / outputBuffer.width;
+                    float textureHeight = (float) surfaceWidth * height / width;
                     verticalAspect = (textureHeight - surfaceHeight) / 2f / textureHeight;
                 } else if (scaleType == FrameScaleType.FIT_Y) {
-                    float textureWidth = (float) surfaceHeight * outputBuffer.width / outputBuffer.height;
+                    float textureWidth = (float) surfaceHeight * width / height;
                     horizontalAspect = (textureWidth - surfaceWidth) / 2f / textureWidth;
                 }
             }
 
-            // This buffer is consumed during each call to glDrawArrays. It needs to be a member variable
-            // rather than a local variable to ensure that it doesn't get garbage collected.
+            if (rotationDegree == 90 || rotationDegree == 270) {
+                float tmp = horizontalAspect;
+                horizontalAspect = verticalAspect;
+                verticalAspect = tmp;
+            }
+
+            float crop = (float) outputBuffer.width * bitDepth / outputBuffer.yuvStrides[0];
             textureCoords = nativeFloatBuffer(
                     crop * horizontalAspect, verticalAspect,
                     crop * horizontalAspect, 1 - verticalAspect,
                     crop * (1 - horizontalAspect), verticalAspect,
                     crop * (1 - horizontalAspect), 1 - verticalAspect);
+            TextureRotationUtil.rotate(textureCoords, outputBuffer.rotationDegree);
+
             GLES20.glVertexAttribPointer(
                     texLocation, 2, GLES20.GL_FLOAT, false, 0, textureCoords);
 
             previousWidth = outputBuffer.width;
             previousStride = outputBuffer.yuvStrides[0];
-
             previousSurfaceWidth = surfaceWidth;
             previousSurfaceHeight = surfaceHeight;
-
             previousScaleType = scaleType;
+            previousRotationDegree = rotationDegree;
         }
         GLES20.glClearColor(bgColorRed, bgColorGreen, bgColorBlue, bgColorAlpha);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);

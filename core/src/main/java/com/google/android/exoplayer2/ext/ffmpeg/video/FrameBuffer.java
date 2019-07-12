@@ -36,6 +36,7 @@ final class FrameBuffer extends OutputBuffer {
   public ByteBuffer[] yuvPlanes;
   public int[] yuvStrides;
   public int bitDepth;
+  public int rotationDegree;
 
   public FrameBuffer(VideoDecoder owner) {
     this.owner = owner;
@@ -108,5 +109,11 @@ final class FrameBuffer extends OutputBuffer {
 
   public boolean hasFlag(int flag) {
     return getFlag(flag);
+  }
+
+  @Override
+  public void clear() {
+    super.clear();
+    rotationDegree = 0;
   }
 }

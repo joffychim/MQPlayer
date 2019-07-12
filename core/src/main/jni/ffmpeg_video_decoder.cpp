@@ -29,6 +29,7 @@ public:
         frame = NULL;
         swsContext = NULL;
         lastErrorCode = 0;
+        rotationDegree = 0;
 
         javaInitForYuvFrameMethod = NULL;
         javaDataField = NULL;
@@ -49,10 +50,12 @@ public:
     AVFrame* frame;
     SwsContext* swsContext;
     int lastErrorCode;
+    int rotationDegree;
 
     jmethodID javaInitForYuvFrameMethod;
     jfieldID javaDataField;
     jfieldID javaTimeFrameUsField;
+    jfieldID javaRotationDegreeField;
 };
 
 // 打印错误
@@ -63,7 +66,7 @@ static void initJavaRef(JNIEnv *env, AVOpaqueData* opaqueData);
 
 // 创建上下文
 static AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
-                                     jint width, jint height,
+                                     jint rotationDegrees, jint width, jint height,
                                      jbyteArray extraData, jint threadCount);
 
 // 释放上下文
@@ -76,8 +79,8 @@ static int decodePacket(AVCodecContext *context, AVPacket *packet);
 static int
 putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame, jobject jOutputBuffer);
 
-VIDEO_DECODER_FUNC(jlong, ffmpegInit, jstring codecName, jint width,
-             jint height, jbyteArray extraData, jint threadCount) {
+VIDEO_DECODER_FUNC(jlong, ffmpegInit, jstring codecName, jint rotationDegrees,
+        jint width, jint height, jbyteArray extraData, jint threadCount) {
     avcodec_register_all();
     AVCodec *codec = getCodecByName(env, codecName);
     if (!codec) {
@@ -85,7 +88,7 @@ VIDEO_DECODER_FUNC(jlong, ffmpegInit, jstring codecName, jint width,
         return 0;
     }
 
-    return (jlong) createContext(env, codec, width, height, extraData, threadCount);
+    return (jlong) createContext(env, codec, rotationDegrees, width, height, extraData, threadCount);
 }
 
 VIDEO_DECODER_FUNC(jint, ffmpegClose, jlong jContext) {
@@ -197,7 +200,7 @@ void logError(const char *functionName, int errorNumber) {
 }
 
 AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
-                              jint width, jint height,
+                              jint rotationDegrees, jint width, jint height,
                               jbyteArray extraData, jint threadCount) {
     AVCodecContext *context = avcodec_alloc_context3(codec);
     if (!context) {
@@ -235,6 +238,8 @@ AVCodecContext *createContext(JNIEnv *env, AVCodec *codec,
     context->height = height;
 
     AVOpaqueData* opaqueData = new AVOpaqueData();
+    opaqueData->rotationDegree = rotationDegrees;
+
     context->opaque = opaqueData;
     initJavaRef(env, opaqueData);
 
@@ -250,6 +255,9 @@ void initJavaRef(JNIEnv *env, AVOpaqueData* opaqueData) {
     opaqueData->javaDataField = env->GetFieldID(outputBufferClass, "data",
                                 "Ljava/nio/ByteBuffer;");
     opaqueData->javaTimeFrameUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
+
+    opaqueData->javaRotationDegreeField = env->GetFieldID(outputBufferClass, "rotationDegree", "I");
+
 }
 
 void releaseContext(AVCodecContext *pCodecContext) {
@@ -292,6 +300,7 @@ int putFrameToOutputBuffer(JNIEnv *env, AVCodecContext *context, AVFrame *frame,
     AVOpaqueData *opaqueData = static_cast<AVOpaqueData *>(context->opaque);
 
     env->SetLongField(jOutputBuffer, opaqueData->javaTimeFrameUsField, frame->pts);
+    env->SetIntField(jOutputBuffer, opaqueData->javaRotationDegreeField, opaqueData->rotationDegree);
 
     int supportFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUV420P10LE, AV_PIX_FMT_YUV444P10LE};
     bool isFormatSupported = false;
