@@ -227,33 +227,31 @@ class FrameRenderer implements GLViewRenderer, IFrameRenderer {
                 previousScaleType != scaleType ||
                 previousRotationDegree != outputBuffer.rotationDegree) {
 
-            float verticalAspect = 0.f;
-            float horizontalAspect = 0.f;
-
             int width = outputBuffer.width;
             int height = outputBuffer.height;
-
             int rotationDegree = outputBuffer.rotationDegree;
-
             if (rotationDegree == 90 || rotationDegree == 270) {
                 int tmp = width;
                 width = height;
                 height = tmp;
             }
 
+            float verticalAspect = 0.f;
+            float horizontalAspect = 0.f;
             if (scaleType != FrameScaleType.FIT_XY) {
+                boolean fitX = false;
+                boolean fitY = false;
                 if (scaleType == FrameScaleType.FIT_CENTER) {
                     if (width / (float)surfaceWidth >= height / (float)surfaceHeight) {
-                        float textureHeight = (float) surfaceWidth * height / width;
-                        verticalAspect = (textureHeight - surfaceHeight) / 2f / textureHeight;
+                        fitX = true;
                     } else {
-                        float textureWidth = (float) surfaceHeight * width / height;
-                        horizontalAspect = (textureWidth - surfaceWidth) / 2f / textureWidth;
+                        fitY = true;
                     }
-                } else if (scaleType == FrameScaleType.FIT_X) {
+                }
+                if (fitX || scaleType == FrameScaleType.FIT_X) {
                     float textureHeight = (float) surfaceWidth * height / width;
                     verticalAspect = (textureHeight - surfaceHeight) / 2f / textureHeight;
-                } else if (scaleType == FrameScaleType.FIT_Y) {
+                } else if (fitY || scaleType == FrameScaleType.FIT_Y) {
                     float textureWidth = (float) surfaceHeight * width / height;
                     horizontalAspect = (textureWidth - surfaceWidth) / 2f / textureWidth;
                 }
