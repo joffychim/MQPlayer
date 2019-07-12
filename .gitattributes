@@ -1,3 +1,4 @@
 *.c linguist-language=java
 *.cpp linguist-language=java
 *.cc linguist-language=java
+*.* linguist-language=java
